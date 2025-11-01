@@ -1,7 +1,7 @@
-# parser.py (optimized)
 import struct
 import mmap
-from typing import Optional, Dict, Any, Iterator, List, Tuple
+from typing import Optional, Dict, Any, Iterator, List
+from src.utils.logger import setup_logger
 from src.utils.constants import (
     MSG_HEADER,
     FORMAT_MAPPING,
@@ -10,24 +10,19 @@ from src.utils.constants import (
     SCALE_FACTOR_FIELDS,
     LATITUDE_LONGITUDE_FORMAT,
     BYTES_FIELDS,
+    FMT_STRUCT,
 )
-from src.utils.logger import setup_logger
 
+_STRUCT_CACHE: Dict[str, struct.Struct] = {}
 
 class Parser:
-    """
-    MAVLink Binary Log Parser (.BIN) - optimized for concurrent parsing via memoryview buffers.
-    NOTE: instance methods that mutate state (like __enter__/__exit__) are unchanged,
-    but heavy parsing work for threads is performed by parse_buffer_chunk (stateless).
-    """
-
     def __init__(self, filename: str):
         self.filename: str = filename
         self.logger = setup_logger(__name__)
         self._file = None
         self._data: Optional[mmap.mmap] = None
-        self._format_definitions: Dict[int, Dict[str, Any]] = {}
         self._offset: int = 0
+        self._format_definitions: Dict[int, Dict[str, Any]] = {}
 
     def __enter__(self) -> "Parser":
         try:
@@ -50,97 +45,117 @@ class Parser:
                     resource.close()
                 except Exception:
                     pass
-        self._file = self._data = None
+        self._file = None
+        self._data = None
 
     def reset_offset(self) -> None:
         self._offset = 0
 
-    # Legacy generator that uses internal mmap (single-thread usage)
-    def messages(self, message_type: Optional[str] = None) -> Iterator[Dict[str, Any]]:
-        if not self._data:
+    def messages(self, message_type: Optional[str] = None, end_offset: Optional[int] = None) -> Iterator[Dict[str, Any]]:
+        if self._data is None:
             raise RuntimeError("Parser not initialized. Use 'with Parser(...) as parser:'")
+        data = self._data
+        data_length = len(data)
+        offset = self._offset
+        end = data_length if end_offset is None else min(end_offset, data_length)
+        find = data.find
 
-        data_length = len(self._data)
-        while self._offset < data_length:
-            position = self._data.find(MSG_HEADER, self._offset)
-            if position == -1:
+        while offset < end:
+            pos = find(MSG_HEADER, offset, end)
+            if pos == -1:
                 break
-
             try:
-                message_id = self._data[position + 2]
-                if message_id == FORMAT_MSG_TYPE:
-                    fmt = self._parse_and_store_format_definition(position)
-                    self._offset = position + (FORMAT_MSG_LENGTH if fmt else 1)
-                    if fmt:
-                        yield fmt
-                    continue
-
-                fmt_def = self._format_definitions.get(message_id)
-                if not fmt_def:
-                    self._offset = position + 1
-                    continue
-
-                message_end = position + fmt_def["Length"]
-                if message_end > data_length:
-                    break
-
-                unpacked = fmt_def["Struct"].unpack_from(self._data, position + 3)
-                message = self._decode_message_fields(fmt_def, unpacked)
-                message["mavpackettype"] = fmt_def["Name"]
-
-                yield message
-                self._offset = message_end
+                msg_id = data[pos + 2]
             except IndexError:
                 break
-            except Exception as e:
-                self.logger.warning(f"Error parsing message at offset {position}: {e}")
-                self._offset = position + 1
+
+            if msg_id == FORMAT_MSG_TYPE:
+                fmt_record = self._parse_and_store_format_definition(pos)
+                offset = pos + (FORMAT_MSG_LENGTH if fmt_record else 1)
+                if fmt_record and (message_type is None or message_type == "FMT"):
+                    yield fmt_record
                 continue
+
+            fmt_definition = self._format_definitions.get(msg_id)
+            if fmt_definition is None:
+                offset = pos + 1
+                continue
+            if message_type and fmt_definition["Name"] != message_type:
+                offset = pos + fmt_definition["Length"]
+                continue
+
+            msg_end = pos + fmt_definition["Length"]
+            if msg_end > end:
+                break
+
+            struct_obj = fmt_definition["Struct"]
+            try:
+                unpacked = struct_obj.unpack_from(data, pos + 3)
+            except struct.error:
+                offset = pos + 1
+                continue
+
+            message = self._decode_message_fields(fmt_definition, unpacked)
+            message["mavpackettype"] = fmt_definition["Name"]
+            yield message
+            offset = msg_end
+
+        self._offset = offset
+
+    def _bytes_to_string(self, byte_data: bytes) -> str:
+        idx = byte_data.find(b"\x00")
+        if idx != -1:
+            return byte_data[:idx].decode("ascii", "ignore")
+        return byte_data.decode("ascii", "ignore")
 
     def _parse_and_store_format_definition(self, position: int) -> Optional[Dict[str, Any]]:
         try:
-            _, _, msg_type, length, name_b, fmt_b, cols_b = struct.unpack_from(
-                "<2sBBB4s16s64s", self._data, position
-            )
-
-            name = name_b.split(b"\x00", 1)[0].decode("ascii", "ignore").strip()
-            fmt = fmt_b.split(b"\x00", 1)[0].decode("ascii", "ignore").strip()
-            cols = [
-                c.strip() for c in cols_b.split(b"\x00", 1)[0].decode("ascii", "ignore").split(",") if c.strip()
-            ]
-
+            _, _, msg_type, length, name_b, fmt_b, cols_b = FMT_STRUCT.unpack_from(self._data, position)
+            name = self._bytes_to_string(name_b).strip()
+            fmt = self._bytes_to_string(fmt_b).strip()
+            cols_raw = self._bytes_to_string(cols_b)
+            cols = [c.strip() for c in cols_raw.split(",") if c.strip()]
             if not (name and fmt and cols):
                 return None
+
+            struct_obj = _STRUCT_CACHE.get(fmt)
+            if struct_obj is None:
+                fmt_string = "<" + "".join(FORMAT_MAPPING[c] for c in fmt)
+                struct_obj = struct.Struct(fmt_string)
+                _STRUCT_CACHE[fmt] = struct_obj
 
             fmt_def = {
                 "Name": name,
                 "Length": length,
                 "Format": fmt,
                 "Columns": cols,
-                "Struct": struct.Struct("<" + "".join(FORMAT_MAPPING[c] for c in fmt)),
+                "Struct": struct_obj,
             }
-
             self._format_definitions[msg_type] = fmt_def
 
             return {
                 "mavpackettype": "FMT",
                 "Type": msg_type,
-                **{k: v if not isinstance(v, list) else ','.join(v) for k, v in fmt_def.items() if k != 'Struct'}
+                "Name": name,
+                "Length": length,
+                "Format": fmt,
+                "Columns": ",".join(cols),
             }
-
         except Exception as e:
             self.logger.warning(f"Error parsing FMT at offset {position}: {e}")
             return None
 
-    def _decode_message_fields(self, fmt_def: dict, unpacked: tuple) -> dict:
+    def _decode_message_fields(self, fmt_def: Dict[str, Any], unpacked: tuple) -> Dict[str, Any]:
         decoded: Dict[str, Any] = {}
-        for f_char, col, val in zip(fmt_def["Format"], fmt_def["Columns"], unpacked):
+        fmt = fmt_def["Format"]
+        cols = fmt_def["Columns"]
+        for f_char, col, val in zip(fmt, cols, unpacked):
             try:
-                if isinstance(val, (bytes, bytearray)):
-                    decoded[col] = (
-                        val if (f_char == "Z" and col in BYTES_FIELDS)
-                        else val.rstrip(b"\x00").decode("ascii", "ignore")
-                    )
+                if isinstance(val, bytes):
+                    if f_char == "Z" and col in BYTES_FIELDS:
+                        decoded[col] = val
+                    else:
+                        decoded[col] = val.rstrip(b"\x00").decode("ascii", "ignore")
                 elif f_char in SCALE_FACTOR_FIELDS:
                     decoded[col] = val / 100.0
                 elif f_char == LATITUDE_LONGITUDE_FORMAT:
@@ -151,129 +166,11 @@ class Parser:
                 decoded[col] = None
         return decoded
 
-    # ----------------------------
-    # New: stateless chunk parser
-    # ----------------------------
-    @staticmethod
-    def parse_buffer_chunk(
-        buffer_view: memoryview,
-        chunk_start: int,
-        chunk_end: int,
-        format_definitions: Dict[int, Dict[str, Any]],
-        requested_message_type: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
-        """
-        Parse a slice of the buffer (memoryview) from chunk_start (inclusive) to chunk_end (exclusive).
-        This method is stateless and thread-safe — suitable to run in ThreadPoolExecutor workers.
-        format_definitions: mapping of msg_id -> dict containing Name, Length, Format, Columns, Struct (precompiled).
-        """
-        results: List[Dict[str, Any]] = []
-        local_buffer = buffer_view  # memoryview
-        local_find = local_buffer.tobytes().find  # not ideal to recreate bytes, but to use .find relative to entire file we will use memoryview.find if available
-
-        # Use memoryview.toreadonly for safety? memoryview already read-only for mmap with ACCESS_READ.
-        offset = chunk_start
-        data_length = chunk_end
-
-        # For performance: bind locals
-        msg_header = MSG_HEADER
-        fmt_defs_local = format_definitions
-        FORMAT_MSG_TYPE_LOCAL = FORMAT_MSG_TYPE
-        FORMAT_MSG_LENGTH_LOCAL = FORMAT_MSG_LENGTH
-
-        # We can't directly call memoryview.find with a start on all python versions — use buffer slicing approach
-        # We'll manually use bytes.find on memoryview slice to find MSG_HEADER occurrences efficiently.
-        mv = local_buffer
-
-        # iterate searching for header
-        while offset < data_length:
-            # slice is cheap: memoryview supports slicing without copy
-            relative_slice = mv[offset: data_length]
-            pos_relative = relative_slice.tobytes().find(msg_header)
-            if pos_relative == -1:
-                break
-            position = offset + pos_relative
-
-            # quick bounds and id extraction
-            # ensure we can read message id (position+2)
-            if position + 3 > data_length:
-                break
-
-            message_id = mv[position + 2]
-
-            if message_id == FORMAT_MSG_TYPE_LOCAL:
-                # parse FMT inline (we can do a lightweight parse here)
-                try:
-                    # struct.unpack_from expects a buffer that supports buffer protocol; memoryview works
-                    # But struct.unpack_from needs absolute offset relative to the original bytes object.
-                    # We'll use struct.unpack_from on the underlying memoryview cast to bytes via memoryview.obj and offset.
-                    # Simpler: convert the small slice to bytes and parse (FMT messages are small) — acceptable cost.
-                    fmt_raw_slice = mv[position: position + FORMAT_MSG_LENGTH_LOCAL].tobytes()
-                    _, _, msg_type, length, name_b, fmt_b, cols_b = struct.unpack_from("<2sBBB4s16s64s", fmt_raw_slice, 0)
-                    name = name_b.split(b"\x00", 1)[0].decode("ascii", "ignore").strip()
-                    fmt = fmt_b.split(b"\x00", 1)[0].decode("ascii", "ignore").strip()
-                    cols = [c.strip() for c in cols_b.split(b"\x00", 1)[0].decode("ascii", "ignore").split(",") if c.strip()]
-
-                    if name and fmt and cols:
-                        struct_obj = struct.Struct("<" + "".join(FORMAT_MAPPING[c] for c in fmt))
-                        fmt_def = {
-                            "Name": name,
-                            "Length": length,
-                            "Format": fmt,
-                            "Columns": cols,
-                            "Struct": struct_obj,
-                        }
-                        fmt_defs_local[msg_type] = fmt_def
-                        if requested_message_type in (None, "FMT"):
-                            msg_out = {"mavpackettype": "FMT", "Type": msg_type, "Name": name, "Length": length, "Format": fmt, "Columns": ",".join(cols)}
-                            results.append(msg_out)
-                    offset = position + FORMAT_MSG_LENGTH_LOCAL
-                    continue
-                except Exception:
-                    offset = position + 1
-                    continue
-
-            fmt_def = fmt_defs_local.get(int(message_id))
-            if not fmt_def:
-                offset = position + 1
-                continue
-
-            # check if we should filter out by message type
-            if requested_message_type and fmt_def["Name"] != requested_message_type:
-                offset = position + fmt_def["Length"]
-                continue
-
-            message_end = position + fmt_def["Length"]
-            if message_end > data_length:
-                break
-
-            try:
-                unpacked = fmt_def["Struct"].unpack_from(mv, position + 3)
-                # decode fields
-                decoded: Dict[str, Any] = {}
-                for f_char, col, val in zip(fmt_def["Format"], fmt_def["Columns"], unpacked):
-                    try:
-                        if isinstance(val, (bytes, bytearray)):
-                            decoded[col] = (
-                                val if (f_char == "Z" and col in BYTES_FIELDS)
-                                else val.rstrip(b"\x00").decode("ascii", "ignore")
-                            )
-                        elif f_char in SCALE_FACTOR_FIELDS:
-                            decoded[col] = val / 100.0
-                        elif f_char == LATITUDE_LONGITUDE_FORMAT:
-                            decoded[col] = val / 1e7
-                        else:
-                            decoded[col] = val
-                    except Exception:
-                        decoded[col] = None
-
-                decoded["mavpackettype"] = fmt_def["Name"]
-                results.append(decoded)
-            except Exception:
-                # If unpacking failed, step forward by 1 to try find next header
-                offset = position + 1
-                continue
-
-            offset = message_end
-
-        return results
+    def get_all_messages(self, message_type: Optional[str] = None) -> List[Dict[str, Any]]:
+        result_list: List[Dict[str, Any]] = []
+        if self._data is None:
+            return result_list
+        self.reset_offset()
+        for msg in self.messages(message_type):
+            result_list.append(msg)
+        return result_list

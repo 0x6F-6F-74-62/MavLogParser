@@ -190,9 +190,8 @@ if __name__ == "__main__":
     path = r"C:\Users\ootb\Downloads\log_file_test_01.bin"
 
     with Parser(path) as parser:
-        count = sum(1 for _ in parser.messages())
+        count = len(parser.get_all_messages())
 
     print(f"\nFormats: {len(parser._format_definitions)}")
     print(f"Total messages: {count:,}")
     print(f"Time: {time.time() - start:.3f}s")
-

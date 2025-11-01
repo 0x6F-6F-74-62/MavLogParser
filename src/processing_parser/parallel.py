@@ -2,6 +2,7 @@ import mmap
 import concurrent.futures
 from typing import List, Dict, Any, Optional, Tuple
 from struct import Struct
+import heapq
 
 from src.processing_parser.parser import Parser
 from src.utils.constants import MSG_HEADER, FORMAT_MAPPING
@@ -49,18 +50,11 @@ class ParallelLogProcessor:
 
         return chunks
     
-    
+      
+              
     @staticmethod
-    def _process_chunk(
-        filename: str,
-        start: int,
-        end: int,
-        fmt_defs: Dict[int, Dict[str, Any]],
-        message_type: Optional[str],
-    ) -> List[Dict[str, Any]]:
-        """Worker function for processing a single chunk of the log file."""
-        results: List[Dict[str, Any]] = []
-
+    def _process_chunk(filename: str, start: int, end: int, fmt_defs: Dict[int, Dict[str, Any]], message_type: Optional[str]) -> List[Dict[str, Any]]:
+        """Process a chunk of the log file and return sorted messages."""
         try:
             for msg_id, fmt in fmt_defs.items():
                 fmt["Struct"] = Struct("<" + "".join(FORMAT_MAPPING[c] for c in fmt["Format"]))
@@ -70,51 +64,58 @@ class ParallelLogProcessor:
                 parser._data = mm
                 parser._offset = start
                 parser._format_definitions = fmt_defs
-                for msg in parser.messages(message_type, end_offset=end):
-                    results.append(msg)
+
+                messages = [msg for msg in parser.messages(message_type, end_offset=end)]
+                messages.sort(key=lambda x: x.get("TimeUS", 0))
+                return messages
 
         except Exception as e:
             print(f"[Worker {start}-{end}] Error: {e}")
-
-        return results
-
+            return []
+   
+   
     def process_all(self, message_type: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Process the entire log file in parallel and merge results."""
+        """Process the entire log file in parallel and return sorted messages."""
         try:
             with Parser(self.filename) as parser:
-                for _ in parser.messages("FMT"):
-                    pass
+                list(parser.messages("FMT"))
                 chunks = self._split_into_chunks(parser)
-
                 fmt_defs = {
-                    msg_id: {k: v for k, v in fmt.items() if k != "Struct"}
+                    msg_id: {
+                        "Name": fmt["Name"],
+                        "Length": fmt["Length"],
+                        "Format": fmt["Format"],
+                        "Columns": ",".join(fmt["Columns"]),
+                    }
                     for msg_id, fmt in parser._format_definitions.items()
                 }
 
-            results: List[Dict[str, Any]] = []
-            self.logger.info(f"Processing {len(chunks)} chunks using {self.max_workers} workers...")
+            if not chunks:
+                return []
 
-            with concurrent.futures.ProcessPoolExecutor(max_workers=self.max_workers) as executor:
-                futures = [
-                    executor.submit(self._process_chunk, self.filename, start, end, fmt_defs, message_type)
-                    for start, end in chunks
-                ]
+            self.logger.info(f"Processing {len(chunks)} chunks with {self.max_workers} workers...")
+            starts, ends = zip(*chunks)
 
-                for f in concurrent.futures.as_completed(futures):
-                    chunk_results = f.result() or []
-                    results.extend(chunk_results)
-                    self.logger.debug(f"Chunk processed: {len(chunk_results)} messages")
+            with concurrent.futures.ProcessPoolExecutor(max_workers=self.max_workers) as ex:
+                sorted_chunks = ex.map(
+                    ParallelLogProcessor._process_chunk,
+                    [self.filename] * len(starts),
+                    starts,
+                    ends,
+                    [fmt_defs] * len(starts),
+                    [message_type] * len(starts),
+                    chunksize=max(1, len(starts) // (self.max_workers * 2)),
+                )
 
-            results.sort(key=lambda x: x.get("TimeUS", 0))
+                results = list(heapq.merge(*sorted_chunks, key=lambda x: x.get("TimeUS", 0)))
+
             self.logger.info(f"Total messages parsed: {len(results):,}")
             return results
 
         except Exception as e:
             self.logger.error(f"Error in parallel processing: {e}")
             return []
-
-
-
+   
 if __name__ == "__main__":
     import time
     start = time.time()
@@ -122,5 +123,6 @@ if __name__ == "__main__":
     messages = processor.process_all()
     print(f"Total messages: {len(messages)}")
     print(f"TIME: {time.time() - start}")
-    # print(messages[:180])
+    # print(messages[:500:15])
+
 
