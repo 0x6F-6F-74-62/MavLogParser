@@ -8,7 +8,7 @@ from src.utils.constants import (
     FORMAT_MSG_LENGTH,
     SCALE_FACTOR_FIELDS,
     LATITUDE_LONGITUDE_FORMAT,
-    BYTES_FIELDS,
+    BYTES_FIELDS,FMT_STRUCT
 )
 from src.utils.logger import setup_logger
 
@@ -18,6 +18,8 @@ class Parser:
     MAVLink Binary Log Parser (.BIN)
     Parses ArduPilot-style MAVLink binary log files using mmap for memory efficiency.
     """
+    _STRUCT_CACHE: Dict[str, struct.Struct] = {}
+
     def __init__(self, filename: str):
         self.filename: str = filename
         self.logger = setup_logger(__name__)
@@ -104,28 +106,37 @@ class Parser:
                 self._offset = position + 1
                 continue
 
+
+    def _bytes_to_str(self, b: bytes) -> str:
+        idx = b.find(0)
+        if idx != -1:
+            b = b[:idx]
+        return b.decode("ascii", "ignore")
+
     def _parse_and_store_format_definition(self, position: int) -> Optional[Dict[str, Any]]:
         """Parse and store an FMT (Format Definition) message."""
         try:
-            _, _, msg_type, length, name_b, fmt_b, cols_b = struct.unpack_from(
-                "<2sBBB4s16s64s", self._data, position
-            )
+            _, _, msg_type, length, name_b, fmt_b, cols_b = FMT_STRUCT.unpack_from(self._data, position)
 
-            name = name_b.split(b"\x00", 1)[0].decode("ascii", "ignore").strip()
-            fmt = fmt_b.split(b"\x00", 1)[0].decode("ascii", "ignore").strip()
-            cols = [
-                c.strip() for c in cols_b.split(b"\x00", 1)[0].decode("ascii", "ignore").split(",") if c.strip()
-            ]
+            name = self._bytes_to_str(name_b).strip()
+            fmt  = self._bytes_to_str(fmt_b).strip()
+            cols_raw = self._bytes_to_str(cols_b)
+            cols = [c for c in (cols_raw.split(",") if cols_raw else []) if c.strip()]
 
             if not (name and fmt and cols):
                 return None
+
+            struct_obj = self._STRUCT_CACHE.get(fmt)
+            if struct_obj is None:
+                struct_obj = struct.Struct("<" + "".join(FORMAT_MAPPING[c] for c in fmt))
+                self._STRUCT_CACHE[fmt] = struct_obj
 
             fmt_def = {
                 "Name": name,
                 "Length": length,
                 "Format": fmt,
                 "Columns": cols,
-                "Struct": struct.Struct("<" + "".join(FORMAT_MAPPING[c] for c in fmt)),
+                "Struct": struct_obj,
             }
 
             self._format_definitions[msg_type] = fmt_def
@@ -133,17 +144,23 @@ class Parser:
             return {
                 "mavpackettype": "FMT",
                 "Type": msg_type,
-                **{k : v if not isinstance(v, list) else ','.join(v) for k, v in fmt_def.items() if k != 'Struct'}
+                "Name": name,
+                "Length": length,
+                "Format": fmt,
+                "Columns": ",".join(cols),
             }
-
+        
         except Exception as e:
             self.logger.warning(f"Error parsing FMT at offset {position}: {e}")
             return None
 
+
     def _decode_message_fields(self, fmt_def: dict, unpacked: tuple) -> dict:
         """Decode fields according to format definition."""
         decoded: Dict[str, Any] = {}
-        for f_char, col, val in zip(fmt_def["Format"], fmt_def["Columns"], unpacked):
+        fmt = fmt_def["Format"]
+        cols = fmt_def["Columns"]
+        for f_char, col, val in zip(fmt, cols, unpacked):
             try:
                 if isinstance(val, bytes):
                     decoded[col] = (
@@ -159,6 +176,7 @@ class Parser:
             except Exception:
                 decoded[col] = None
         return decoded
+
 
     def get_all_messages(self, message_type: Optional[str] = None) -> List[Dict[str, Any]]:
         """Return all messages of the specified type (or all messages if None)."""
@@ -177,3 +195,4 @@ if __name__ == "__main__":
     print(f"\nFormats: {len(parser._format_definitions)}")
     print(f"Total messages: {count:,}")
     print(f"Time: {time.time() - start:.3f}s")
+

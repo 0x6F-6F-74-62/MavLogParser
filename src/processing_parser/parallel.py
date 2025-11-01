@@ -1,4 +1,3 @@
-import os
 import mmap
 import concurrent.futures
 from typing import List, Dict, Any, Optional, Tuple
@@ -49,8 +48,8 @@ class ParallelLogProcessor:
             start = end
 
         return chunks
-
-   
+    
+    
     @staticmethod
     def _process_chunk(
         filename: str,
@@ -124,3 +123,4 @@ if __name__ == "__main__":
     print(f"Total messages: {len(messages)}")
     print(f"TIME: {time.time() - start}")
     # print(messages[:180])
+

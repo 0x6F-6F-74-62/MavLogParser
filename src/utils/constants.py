@@ -1,3 +1,4 @@
+import struct
 
 MSG_HEADER = b'\xA3\x95'
 FORMAT_MSG_TYPE = 0x80
@@ -10,8 +11,7 @@ FORMAT_MAPPING = {
 SCALE_FACTOR_FIELDS = {'c', 'C', 'e', 'E'}      
 LATITUDE_LONGITUDE_FORMAT = 'L'                       
 BYTES_FIELDS = {'Data', 'Blob', 'Payload'}
-
-
+FMT_STRUCT = struct.Struct("<2sBBB4s16s64s")
 # HEADER = b'\xA3\x95'
 # FMT_TYPE = 0x80
 # FMT_LENGTH = 89
