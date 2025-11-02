@@ -1,3 +1,6 @@
+"""MAVLink Binary Log Parser (.BIN) using mmap for memory efficiency."""
+
+import os
 import struct
 import mmap
 from typing import Optional, Dict, Any, Iterator, List
@@ -21,18 +24,19 @@ class Parser:
     _STRUCT_CACHE: Dict[str, struct.Struct] = {}
 
     def __init__(self, filename: str):
+        """Initialize the parser with the given filename."""
         self.filename: str = filename
-        self.logger = setup_logger(__name__)
+        self.logger = setup_logger(os.path.basename(__file__))
         self._file: Optional[Any] = None
-        self._data: Optional[mmap.mmap] = None
-        self._offset: int = 0
-        self._format_definitions: Dict[int, Dict[str, Any]] = {}
-
+        self.data: Optional[mmap.mmap] = None
+        self.offset: int = 0
+        self.format_definitions: Dict[int, Dict[str, Any]] = {}
+        
     def __enter__(self) -> "Parser":
         """Open and memory-map the MAVLink log file."""
         try:
             self._file = open(self.filename, "rb")
-            self._data = mmap.mmap(self._file.fileno(), 0, access=mmap.ACCESS_READ)
+            self.data = mmap.mmap(self._file.fileno(), 0, access=mmap.ACCESS_READ)
             self.logger.debug(f"Opened file: {self.filename}")
             return self
         except Exception as e:
@@ -41,112 +45,115 @@ class Parser:
             raise
 
     def __exit__(self, *args) -> None:
+        """Close the memory-mapped file and underlying file."""
         self.close()
 
     def close(self) -> None:
         """Safely close resources."""
-        for resource in (self._data, self._file):
+        for resource in (self.data, self._file):
             if resource:
                 try:
                     resource.close()
                 except Exception:
                     pass
-        self._file = self._data = None
 
     def reset(self):
         """Reset parser offset to beginning."""
-        self._offset = 0
+        self.offset: int = 0
 
     def messages(self, message_type: Optional[str] = None, end_offset: Optional[int] = None) -> Iterator[Dict[str, Any]]:
         """
         Generator yielding MAVLink messages as dictionaries.
         """
-        if not self._data:
+        if not self.data:
             raise RuntimeError("Parser not initialized. Use 'with MavlogParser(...) as parser:'")
 
-        data_length = len(self._data)
+        data_length : int = len(self.data)
 
-        while self._offset < data_length and (end_offset is None or self._offset < end_offset):
-            position = self._data.find(MSG_HEADER, self._offset)
+        while self.offset < data_length and (end_offset is None or self.offset < end_offset):
+            position: int = self.data.find(MSG_HEADER, self.offset)
             if position == -1:
                 break
 
             try:
-                message_id = self._data[position + 2]
+                message_id: int = self.data[position + 2]
                 if message_id == FORMAT_MSG_TYPE:
-                    fmt = self._parse_and_store_format_definition(position)
-                    self._offset = position + (FORMAT_MSG_LENGTH if fmt else 1)
+                    fmt: Optional[Dict[str, Any]] = self._parse_and_store_format_definition(position)
+                    self.offset = position + (FORMAT_MSG_LENGTH if fmt else 1)
                     if fmt and (message_type in (None, "FMT")):
                         yield fmt
                     continue
 
-                fmt_def = self._format_definitions.get(message_id)
+                fmt_def: Optional[Dict[str, Any]] = self.format_definitions.get(message_id)
                 if not fmt_def:
-                    self._offset = position + 1
+                    self.offset = position + 1
                     continue
 
                 if message_type and fmt_def["Name"] != message_type:
-                    self._offset = position + fmt_def["Length"]
+                    self.offset = position + fmt_def["Length"]
                     continue
 
-                message_end = position + fmt_def["Length"]
+                message_end: int = position + fmt_def["Length"]
                 if message_end > data_length:
                     break
 
-                unpacked = fmt_def["Struct"].unpack_from(self._data, position + 3)
-                message = self._decode_message_fields(fmt_def, unpacked)
+                unpacked: tuple = fmt_def["Struct"].unpack_from(self.data, position + 3)
+                message: Dict[str, Any] = self._decode_message_fields(fmt_def, unpacked)
                 message["mavpackettype"] = fmt_def["Name"]
 
                 yield message
-                self._offset = message_end
+                self.offset = message_end
             except IndexError:
                 break
             except Exception as e:
                 self.logger.warning(f"Error parsing message at offset {position}: {e}")
-                self._offset = position + 1
+                self.offset = position + 1
                 continue
 
 
-    def _bytes_to_str(self, b: bytes) -> str:
-        idx = b.find(0)
-        if idx != -1:
-            b = b[:idx]
-        return b.decode("ascii", "ignore")
+    def _bytes_to_str(self, bytes_data: bytes) -> str:
+        """Convert bytes to ASCII string, stopping at null byte."""
+        position: int = bytes_data.find(0)
+        if position != -1:
+            bytes_data = bytes_data[:position]
+        return bytes_data.decode("ascii", "ignore")
 
     def _parse_and_store_format_definition(self, position: int) -> Optional[Dict[str, Any]]:
         """Parse and store an FMT (Format Definition) message."""
         try:
-            _, _, msg_type, length, name_b, fmt_b, cols_b = FMT_STRUCT.unpack_from(self._data, position)
+            if self.data is None:
+                raise RuntimeError("Parser not initialized. Use 'with Parser(...) as parser:'")
+            _, _, msg_type, length, name_bin, format_def_bin, columns_bin = FMT_STRUCT.unpack_from(self.data, position)
 
-            name = self._bytes_to_str(name_b).strip()
-            fmt  = self._bytes_to_str(fmt_b).strip()
-            cols_raw = self._bytes_to_str(cols_b)
-            cols = [c for c in (cols_raw.split(",") if cols_raw else []) if c.strip()]
+            name: str = self._bytes_to_str(name_bin).strip()
+            format_def: str = self._bytes_to_str(format_def_bin).strip()
+            columns_raw: str = self._bytes_to_str(columns_bin)
+            cols: List[str] = [c for c in (columns_raw.split(",") if columns_raw else []) if c.strip()]
 
-            if not (name and fmt and cols):
+            if not (name and format_def and cols):
                 return None
 
-            struct_obj = self._STRUCT_CACHE.get(fmt)
-            if struct_obj is None:
-                struct_obj = struct.Struct("<" + "".join(FORMAT_MAPPING[c] for c in fmt))
-                self._STRUCT_CACHE[fmt] = struct_obj
+            # struct_obj: Optional[struct.Struct] = self._STRUCT_CACHE.get(format_def)
+            # if struct_obj is None:
+            #     struct_obj = struct.Struct("<" + "".join(FORMAT_MAPPING[c] for c in format_def))
+            #     self._STRUCT_CACHE[format_def] = struct_obj
 
-            fmt_def = {
-                "Name": name,
-                "Length": length,
-                "Format": fmt,
-                "Columns": cols,
-                "Struct": struct_obj,
-            }
+            # fmt_def = {
+            #     "Name": name,
+            #     "Length": length,
+            #     "Format": format_def,
+            #     "Columns": cols,
+            #     "Struct": struct_obj,
+            # }
 
-            self._format_definitions[msg_type] = fmt_def
+            self.format_definitions[msg_type] = self._build_format_definition(name, length, format_def, cols)  # fmt_def
 
             return {
                 "mavpackettype": "FMT",
                 "Type": msg_type,
                 "Name": name,
                 "Length": length,
-                "Format": fmt,
+                "Format": format_def,
                 "Columns": ",".join(cols),
             }
         
@@ -158,8 +165,8 @@ class Parser:
     def _decode_message_fields(self, fmt_def: dict, unpacked: tuple) -> dict:
         """Decode fields according to format definition."""
         decoded: Dict[str, Any] = {}
-        fmt = fmt_def["Format"]
-        cols = fmt_def["Columns"]
+        fmt: str = fmt_def["Format"]
+        cols: List[str] = fmt_def["Columns"]
         for f_char, col, val in zip(fmt, cols, unpacked):
             try:
                 if isinstance(val, bytes):
@@ -182,6 +189,21 @@ class Parser:
         """Return all messages of the specified type (or all messages if None)."""
         return list(self.messages(message_type))
 
+    def _build_format_definition(self, name: str, length: int, format_def: str, columns: List[str]) -> Optional[Dict[str, Any]]:
+        """Reconstruct Struct from a plain FMT dict (used by workers)."""
+        try:
+            struct_obj: Optional[struct.Struct] = self._STRUCT_CACHE.get(format_def)
+            if struct_obj is None:
+                fmt_string: str = "<" + "".join(FORMAT_MAPPING[c] for c in format_def)
+                struct_obj = struct.Struct(fmt_string)
+                self._STRUCT_CACHE[format_def] = struct_obj
+
+            return {"Name": name, "Length": length, "Format": format_def, "Columns": columns, "Struct": struct_obj}
+
+        except KeyError as e:
+            self.logger.warning(f"Skipping invalid FMT format at definition: {repr(format_def)} (invalid char {repr(e.args[0])})")
+            return None
+
 
 if __name__ == "__main__":
     import time
@@ -192,6 +214,7 @@ if __name__ == "__main__":
     with Parser(path) as parser:
         count = len(parser.get_all_messages())
 
-    print(f"\nFormats: {len(parser._format_definitions)}")
+    print(f"\nFormats: {len(parser.format_definitions)}")
     print(f"Total messages: {count:,}")
     print(f"Time: {time.time() - start:.3f}s")
+

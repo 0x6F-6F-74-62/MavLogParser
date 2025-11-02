@@ -3,7 +3,7 @@ import concurrent.futures
 from typing import List, Dict, Any, Optional, Tuple
 from struct import Struct
 import heapq
-
+import os
 from src.processing_parser.parser import Parser
 from src.utils.constants import MSG_HEADER, FORMAT_MAPPING
 from src.utils.logger import setup_logger
@@ -15,55 +15,46 @@ class ParallelLogProcessor:
     Splits the file into aligned chunks and uses multiple processes for faster parsing.
     """
 
-    def __init__(self, filename: str, chunk_size_mb: int = 100, max_workers: int = 4, overlap_bytes: int = 128):
-        self.filename = filename
-        self.chunk_size_mb = chunk_size_mb
-        self.max_workers = max_workers
-        self.overlap_bytes = overlap_bytes
-        self.logger = setup_logger(__name__)
-
-   
+    def __init__(self, filename: str, chunk_size_mb: int = 100, max_workers: Optional[int] = None, overlap_bytes: int = 128):
+        self.filename: str = filename
+        self.chunk_size_mb: int = chunk_size_mb
+        self.max_workers: int = max_workers if max_workers else os.cpu_count() or 4
+        self.overlap_bytes: int = overlap_bytes
+        self.logger = setup_logger(os.path.basename(__file__))
+    
     def _split_into_chunks(self, parser: Parser) -> List[Tuple[int, int]]:
-        if not parser._data:
-            raise RuntimeError("File must be opened before splitting.")
+        """"""
+        file_size: int = os.path.getsize(self.filename)
+        chunk_size: int = max(1, file_size // self.max_workers) 
+        chunks: List[Tuple[int, int]] = []
+        data: Optional[mmap.mmap] = parser.data
+        if data is None:
+            raise RuntimeError("Parser data is not initialized before splitting.")
+        start_pos: int = 0
+        while start_pos < file_size:
+            tentative_end: int = min(start_pos + chunk_size, file_size)
 
-        file_size = len(parser._data)
-        chunk_size = self.chunk_size_mb * 1024 * 1024
-        chunks = []
+            next_header: int = data.find(MSG_HEADER, tentative_end, min(tentative_end + self.overlap_bytes, file_size)) 
 
-        start = 0
-        while start < file_size:
-            start = parser._data.find(MSG_HEADER, start)
-            if start == -1:
-                break
+            end_pos: int = file_size if next_header == -1 else next_header            
 
-            end = min(start + chunk_size, file_size)
-
-            next_header = parser._data.find(MSG_HEADER, end)
-            if next_header == -1:
-                end = file_size
-            else:
-                end = next_header
-
-            chunks.append((start, end))
-            start = end
-
+            chunks.append((start_pos, end_pos))
+            start_pos = end_pos
         return chunks
     
-      
               
     @staticmethod
     def _process_chunk(filename: str, start: int, end: int, fmt_defs: Dict[int, Dict[str, Any]], message_type: Optional[str]) -> List[Dict[str, Any]]:
         """Process a chunk of the log file and return sorted messages."""
         try:
-            for msg_id, fmt in fmt_defs.items():
+            for _, fmt in fmt_defs.items():
                 fmt["Struct"] = Struct("<" + "".join(FORMAT_MAPPING[c] for c in fmt["Format"]))
 
             with open(filename, "rb") as f, mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
                 parser = Parser(filename)
-                parser._data = mm
-                parser._offset = start
-                parser._format_definitions = fmt_defs
+                parser.data = mm
+                parser.offset = start
+                parser.format_definitions = fmt_defs
 
                 messages = [msg for msg in parser.messages(message_type, end_offset=end)]
                 messages.sort(key=lambda x: x.get("TimeUS", 0))
@@ -87,7 +78,7 @@ class ParallelLogProcessor:
                         "Format": fmt["Format"],
                         "Columns": ",".join(fmt["Columns"]),
                     }
-                    for msg_id, fmt in parser._format_definitions.items()
+                    for msg_id, fmt in parser.format_definitions.items()
                 }
 
             if not chunks:
@@ -118,11 +109,10 @@ class ParallelLogProcessor:
    
 if __name__ == "__main__":
     import time
-    start = time.time()
-    processor = ParallelLogProcessor(r"C:\Users\ootb\Downloads\log_file_test_01.bin", chunk_size_mb=50, max_workers=4)
-    messages = processor.process_all()
-    print(f"Total messages: {len(messages)}")
-    print(f"TIME: {time.time() - start}")
+    start_time = time.time()
+    processor = ParallelLogProcessor(r"C:\Users\ootb\Downloads\log_file_test_01.bin")
+    my_messages = processor.process_all()
+    print(f"Total messages: {len(my_messages)}")
+    print(f"TIME: {time.time() - start_time}")
     # print(messages[:500:15])
-
 
