@@ -1,7 +1,6 @@
 """MAVLink Binary Log Parser (.BIN) using mmap for memory efficiency."""
-
 import os
-import struct
+from struct import Struct
 import mmap
 from typing import Optional, Dict, Any, Iterator, List
 from src.utils.constants import (
@@ -21,7 +20,7 @@ class Parser:
     MAVLink Binary Log Parser (.BIN)
     Parses ArduPilot-style MAVLink binary log files using mmap for memory efficiency.
     """
-    _STRUCT_CACHE: Dict[str, struct.Struct] = {}
+    _STRUCT_CACHE: Dict[str, Struct] = {}
 
     def __init__(self, filename: str):
         """Initialize the parser with the given filename."""
@@ -37,26 +36,24 @@ class Parser:
         try:
             self._file = open(self.filename, "rb")
             self.data = mmap.mmap(self._file.fileno(), 0, access=mmap.ACCESS_READ)
-            self.logger.debug(f"Opened file: {self.filename}")
+            self.logger.info(f"Opened file: {self.filename}")
             return self
         except Exception as e:
             self.logger.error(f"Failed to open file '{self.filename}': {e}")
-            self.close()
             raise
 
     def __exit__(self, *args) -> None:
         """Close the memory-mapped file and underlying file."""
-        self.close()
+        try:
+            if self.data:
+                self.data.close()
+            if self._file:
+                self._file.close()
+        except Exception as e:
+            self.logger.error(f"Failed to close resource: {e}")
+        self.data = self._file = None
 
-    def close(self) -> None:
-        """Safely close resources."""
-        for resource in (self.data, self._file):
-            if resource:
-                try:
-                    resource.close()
-                except Exception:
-                    pass
-
+   
     def reset(self):
         """Reset parser offset to beginning."""
         self.offset: int = 0
@@ -106,7 +103,7 @@ class Parser:
             except IndexError:
                 break
             except Exception as e:
-                self.logger.warning(f"Error parsing message at offset {position}: {e}")
+                self.logger.error(f"Error parsing message at offset {position}: {e}")
                 self.offset = position + 1
                 continue
 
@@ -133,20 +130,20 @@ class Parser:
             if not (name and format_def and cols):
                 return None
 
-            # struct_obj: Optional[struct.Struct] = self._STRUCT_CACHE.get(format_def)
-            # if struct_obj is None:
-            #     struct_obj = struct.Struct("<" + "".join(FORMAT_MAPPING[c] for c in format_def))
-            #     self._STRUCT_CACHE[format_def] = struct_obj
+            struct_obj: Optional[Struct] = self._STRUCT_CACHE.get(format_def)
+            if struct_obj is None:
+                struct_obj = Struct("<" + "".join(FORMAT_MAPPING[c] for c in format_def))
+                self._STRUCT_CACHE[format_def] = struct_obj
 
-            # fmt_def = {
-            #     "Name": name,
-            #     "Length": length,
-            #     "Format": format_def,
-            #     "Columns": cols,
-            #     "Struct": struct_obj,
-            # }
+            fmt_def = {
+                "Name": name,
+                "Length": length,
+                "Format": format_def,
+                "Columns": cols,
+                "Struct": struct_obj,
+            }
 
-            self.format_definitions[msg_type] = self._build_format_definition(name, length, format_def, cols)  # fmt_def
+            self.format_definitions[msg_type] =  fmt_def
 
             return {
                 "mavpackettype": "FMT",
@@ -158,63 +155,61 @@ class Parser:
             }
         
         except Exception as e:
-            self.logger.warning(f"Error parsing FMT at offset {position}: {e}")
+            self.logger.error(f"Error parsing FMT at offset {position}: {e}")
             return None
 
 
+    # def _decode_message_fields(self, fmt_def: dict, unpacked: tuple) -> dict:
+    #     """Decode fields according to format definition."""
+    #     decoded: Dict[str, Any] = {}
+    #     fmt: str = fmt_def["Format"]
+    #     cols: List[str] = fmt_def["Columns"]
+    #     for f_char, col, val in zip(fmt, cols, unpacked):
+    #         try:
+    #             if isinstance(val, bytes):
+    #                 decoded[col] = (
+    #                     val if (f_char == "Z" and col in BYTES_FIELDS)
+    #                     else val.rstrip(b"\x00").decode("ascii", "ignore")
+    #                 )
+    #             elif f_char in SCALE_FACTOR_FIELDS:
+    #                 decoded[col] = val / 100.0
+    #             elif f_char == LATITUDE_LONGITUDE_FORMAT:
+    #                 decoded[col] = val / 1e7
+    #             else:
+    #                 decoded[col] = val
+    #         except Exception:
+    #             decoded[col] = None
+    #     return decoded
     def _decode_message_fields(self, fmt_def: dict, unpacked: tuple) -> dict:
-        """Decode fields according to format definition."""
-        decoded: Dict[str, Any] = {}
-        fmt: str = fmt_def["Format"]
-        cols: List[str] = fmt_def["Columns"]
-        for f_char, col, val in zip(fmt, cols, unpacked):
-            try:
-                if isinstance(val, bytes):
-                    decoded[col] = (
-                        val if (f_char == "Z" and col in BYTES_FIELDS)
-                        else val.rstrip(b"\x00").decode("ascii", "ignore")
-                    )
-                elif f_char in SCALE_FACTOR_FIELDS:
-                    decoded[col] = val / 100.0
-                elif f_char == LATITUDE_LONGITUDE_FORMAT:
-                    decoded[col] = val / 1e7
-                else:
-                    decoded[col] = val
-            except Exception:
-                decoded[col] = None
-        return decoded
+        """Decode fields according to format definition (cleaner dict comprehension)."""
+        fmt = fmt_def["Format"]
+        cols = fmt_def["Columns"]
+
+        return {
+            col:
+                val if isinstance(val, bytes) and f_char == "Z" and col in BYTES_FIELDS
+                else val[: val.find(b"\x00")].decode("ascii", "ignore") if isinstance(val, bytes)
+                else val / 100.0 if f_char in SCALE_FACTOR_FIELDS
+                else val / 1e7 if f_char == LATITUDE_LONGITUDE_FORMAT
+                else val
+            for f_char, col, val in zip(fmt, cols, unpacked)
+        }
+
 
 
     def get_all_messages(self, message_type: Optional[str] = None) -> List[Dict[str, Any]]:
         """Return all messages of the specified type (or all messages if None)."""
         return list(self.messages(message_type))
 
-    def _build_format_definition(self, name: str, length: int, format_def: str, columns: List[str]) -> Optional[Dict[str, Any]]:
-        """Reconstruct Struct from a plain FMT dict (used by workers)."""
-        try:
-            struct_obj: Optional[struct.Struct] = self._STRUCT_CACHE.get(format_def)
-            if struct_obj is None:
-                fmt_string: str = "<" + "".join(FORMAT_MAPPING[c] for c in format_def)
-                struct_obj = struct.Struct(fmt_string)
-                self._STRUCT_CACHE[format_def] = struct_obj
-
-            return {"Name": name, "Length": length, "Format": format_def, "Columns": columns, "Struct": struct_obj}
-
-        except KeyError as e:
-            self.logger.warning(f"Skipping invalid FMT format at definition: {repr(format_def)} (invalid char {repr(e.args[0])})")
-            return None
 
 
 if __name__ == "__main__":
     import time
 
-    start = time.time()
     path = r"C:\Users\ootb\Downloads\log_file_test_01.bin"
-
+    start = time.time()
     with Parser(path) as parser:
         count = len(parser.get_all_messages())
-
     print(f"\nFormats: {len(parser.format_definitions)}")
     print(f"Total messages: {count:,}")
     print(f"Time: {time.time() - start:.3f}s")
-

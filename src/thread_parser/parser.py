@@ -171,6 +171,18 @@ class Parser:
         if self._data is None:
             return result_list
         self.reset_offset()
-        for msg in self.messages(message_type):
-            result_list.append(msg)
-        return result_list
+        return list(self.messages(message_type))
+
+
+
+
+if __name__ == "__main__":
+    import time
+
+    path = r"C:\Users\ootb\Downloads\log_file_test_01.bin"
+    start = time.time()
+    with Parser(path) as parser:
+        count = len(parser.get_all_messages())
+    print(f"Total messages: {count:,}")
+    print(f"Time: {time.time() - start:.3f}s")
+

@@ -27,22 +27,15 @@ class ParallelLogProcessor:
         file_size: int = os.path.getsize(self.filename)
         chunk_size: int = max(1, file_size // self.max_workers) 
         chunks: List[Tuple[int, int]] = []
-        data: Optional[mmap.mmap] = parser.data
-        if data is None:
-            raise RuntimeError("Parser data is not initialized before splitting.")
         start_pos: int = 0
         while start_pos < file_size:
             tentative_end: int = min(start_pos + chunk_size, file_size)
-
-            next_header: int = data.find(MSG_HEADER, tentative_end, min(tentative_end + self.overlap_bytes, file_size)) 
-
-            end_pos: int = file_size if next_header == -1 else next_header            
-
+            next_header: int = parser.data.find(MSG_HEADER, tentative_end) 
+            end_pos: int = next_header if next_header != -1 else file_size            
             chunks.append((start_pos, end_pos))
             start_pos = end_pos
         return chunks
-    
-              
+           
     @staticmethod
     def _process_chunk(filename: str, start: int, end: int, fmt_defs: Dict[int, Dict[str, Any]], message_type: Optional[str]) -> List[Dict[str, Any]]:
         """Process a chunk of the log file and return sorted messages."""
@@ -56,7 +49,9 @@ class ParallelLogProcessor:
                 parser.offset = start
                 parser.format_definitions = fmt_defs
 
-                messages = [msg for msg in parser.messages(message_type, end_offset=end)]
+                # messages = [msg for msg in parser.messages(message_type, end_offset=end)]
+                messages = list(parser.messages(message_type, end_offset=end))
+
                 messages.sort(key=lambda x: x.get("TimeUS", 0))
                 return messages
 
@@ -114,5 +109,4 @@ if __name__ == "__main__":
     my_messages = processor.process_all()
     print(f"Total messages: {len(my_messages)}")
     print(f"TIME: {time.time() - start_time}")
-    # print(messages[:500:15])
 
