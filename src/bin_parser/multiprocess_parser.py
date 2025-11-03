@@ -6,7 +6,7 @@ import os
 from struct import Struct
 from typing import Any, Dict, Iterator, List, Optional, Tuple
 
-from src.processing_parser.parser import BinParser
+from src.processing_parser.parser import Parser
 from src.utils.constants import FORMAT_MAPPING, MSG_HEADER
 from src.utils.logger import setup_logger
 
@@ -23,7 +23,7 @@ class ParallelBinParser:
         self.max_workers: int = max_workers if max_workers else os.cpu_count() or 4
         self.logger = setup_logger(os.path.basename(__file__))
 
-    def _split_to_chunks(self, parser: BinParser) -> List[Tuple[int, int]]:
+    def _split_to_chunks(self, parser: Parser) -> List[Tuple[int, int]]:
         """Split the file into chunks aligned to message headers."""
         file_size: int = os.path.getsize(self.filename)
         chunk_size: int = max(1, file_size // self.max_workers)
@@ -46,7 +46,7 @@ class ParallelBinParser:
             for _, fmt in format_defs.items():
                 fmt["Struct"] = Struct("<" + "".join(FORMAT_MAPPING[char] for char in fmt["Format"]))
 
-            with BinParser(filename) as parser:
+            with Parser(filename) as parser:
                 parser.offset = chunk_range[0]
                 parser.format_defs = format_defs
                 messages = list(parser.messages(message_type, end_index=chunk_range[1]))
@@ -57,7 +57,7 @@ class ParallelBinParser:
     def process_all(self, message_type: Optional[str] = None) -> List[Dict[str, Any]]:
         """Process the entire log file in parallel and return sorted messages."""
         try:
-            with BinParser(self.filename) as parser:
+            with Parser(self.filename) as parser:
                 list(parser.messages("FMT"))
                 chunks = self._split_to_chunks(parser)
                 fmt_defs = {

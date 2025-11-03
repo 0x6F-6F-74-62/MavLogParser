@@ -18,7 +18,7 @@ from src.utils.constants import (
 from src.utils.logger import setup_logger
 
 
-class BinParser:
+class Parser:
     """
     MAVLink Binary Log Parser (.BIN)
     Parses ArduPilot-style MAVLink binary log files using mmap for memory efficiency.
@@ -32,7 +32,7 @@ class BinParser:
         self.offset: int = 0
         self.format_defs: Dict[int, Dict[str, Any]] = {}
 
-    def __enter__(self) -> "BinParser":
+    def __enter__(self) -> "Parser":
         """Open and memory-map the MAVLink log file."""
         try:
             self._file = open(self.filename, "rb")
@@ -183,7 +183,7 @@ if __name__ == "__main__":
     start = time.time()
     path = r"C:\Users\ootb\Downloads\log_file_test_01.bin"
 
-    with BinParser(path) as parser:
+    with Parser(path) as parser:
         count = sum(1 for _ in parser.messages())
 
     print(f"\nFormats: {len(parser.format_defs)}")
