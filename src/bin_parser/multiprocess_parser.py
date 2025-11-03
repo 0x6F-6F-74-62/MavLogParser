@@ -4,14 +4,14 @@ import concurrent.futures
 import heapq
 import os
 from struct import Struct
-from typing import Any, Dict, Iterator, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
-from src.processing_parser.parser import Parser
+from src.bin_parser.parser import Parser
 from src.utils.constants import FORMAT_MAPPING, MSG_HEADER
 from src.utils.logger import setup_logger
 
 
-class ParallelBinParser:
+class MultiprocessParser:
     """
     Processes large MAVLink binary log files (.BIN) in parallel.
     Splits the file into aligned chunks and uses multiple processes for faster parsing.
@@ -78,7 +78,7 @@ class ParallelBinParser:
 
             with concurrent.futures.ProcessPoolExecutor(max_workers=self.max_workers) as executor:
                 sorted_chunks = executor.map(
-                    ParallelBinParser._process_chunk,
+                    MultiprocessParser._process_chunk,
                     [self.filename] * chunks_count,
                     chunks,
                     [fmt_defs] * chunks_count,
@@ -100,7 +100,7 @@ if __name__ == "__main__":
     import time
 
     start_time = time.time()
-    processor = ParallelBinParser(r"C:\Users\ootb\Downloads\log_file_test_01.bin")
+    processor = MultiprocessParser(r"C:\Users\ootb\Downloads\log_file_test_01.bin")
     my_messages = processor.process_all()
     print(f"Total messages: {len(my_messages)}")
     print(f"TIME: {time.time() - start_time}")
