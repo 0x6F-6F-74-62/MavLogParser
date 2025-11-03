@@ -1,14 +1,31 @@
 import struct
 
-MSG_HEADER = b'\xA3\x95'
+MSG_HEADER = b"\xa3\x95"
 FORMAT_MSG_TYPE = 0x80
 FORMAT_MSG_LENGTH = 89
 FORMAT_MAPPING = {
-    'a': '32h', 'b': 'b', 'B': 'B', 'h': 'h', 'H': 'H', 'i': 'i', 'I': 'I',
-    'f': 'f', 'd': 'd', 'n': '4s', 'N': '16s', 'Z': '64s',
-    'c': 'h', 'C': 'H', 'e': 'i', 'E': 'I', 'L': 'i', 'M': 'B', 'q': 'q', 'Q': 'Q'
+    "a": "32h",
+    "b": "b",
+    "B": "B",
+    "h": "h",
+    "H": "H",
+    "i": "i",
+    "I": "I",
+    "f": "f",
+    "d": "d",
+    "n": "4s",
+    "N": "16s",
+    "Z": "64s",
+    "c": "h",
+    "C": "H",
+    "e": "i",
+    "E": "I",
+    "L": "i",
+    "M": "B",
+    "q": "q",
+    "Q": "Q",
 }
-SCALE_FACTOR_FIELDS = {'c', 'C', 'e', 'E'}      
-LATITUDE_LONGITUDE_FORMAT = 'L'                       
-BYTES_FIELDS = {'Data', 'Blob', 'Payload'}
-FMT_STRUCT = struct.Struct("<2sBBB4s16s64s")
+SCALE_FACTOR_FIELDS = {"c", "C", "e", "E"}
+LATITUDE_LONGITUDE_FORMAT = "L"
+BYTES_FIELDS = {"Data", "Blob", "Payload"}
+FMT_STRUCT = "<2sBBB4s16s64s"

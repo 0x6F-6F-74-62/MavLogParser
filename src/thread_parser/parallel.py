@@ -1,11 +1,10 @@
 import mmap
 from concurrent.futures import ThreadPoolExecutor
-from typing import Optional, Dict, Any, List, Tuple
-from src.utils.logger import setup_logger
-from src.utils.constants import (
-    MSG_HEADER,
-)
+from typing import Any, Dict, List, Optional, Tuple
+
 from src.thread_parser.parser import Parser
+from src.utils.constants import MSG_HEADER
+from src.utils.logger import setup_logger
 
 
 class ThreadedLogProcessor:
@@ -46,7 +45,7 @@ class ThreadedLogProcessor:
         start_offset: int,
         end_offset: int,
         fmt_defs: Dict[int, Dict[str, Any]],
-        requested_message_type: Optional[str]
+        requested_message_type: Optional[str],
     ) -> List[Dict[str, Any]]:
         try:
             with open(filename, "rb") as fobj, mmap.mmap(fobj.fileno(), 0, access=mmap.ACCESS_READ) as mem_map:
@@ -106,9 +105,9 @@ class ThreadedLogProcessor:
             return []
 
 
-
 if __name__ == "__main__":
     import time
+
     start = time.time()
 
     processor = ThreadedLogProcessor(

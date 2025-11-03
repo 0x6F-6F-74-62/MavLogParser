@@ -1,14 +1,15 @@
-import struct
 import mmap
-from typing import Optional, Dict, Any, Iterator, List
+import struct
+from typing import Any, Dict, Iterator, List, Optional
+
 from src.utils.constants import (
-    MSG_HEADER,
-    FORMAT_MAPPING,
-    FORMAT_MSG_TYPE,
-    FORMAT_MSG_LENGTH,
-    SCALE_FACTOR_FIELDS,
-    LATITUDE_LONGITUDE_FORMAT,
     BYTES_FIELDS,
+    FORMAT_MAPPING,
+    FORMAT_MSG_LENGTH,
+    FORMAT_MSG_TYPE,
+    LATITUDE_LONGITUDE_FORMAT,
+    MSG_HEADER,
+    SCALE_FACTOR_FIELDS,
 )
 from src.utils.logger import setup_logger
 
@@ -18,6 +19,7 @@ class MavlogParser:
     MAVLink Binary Log Parser (.BIN)
     Parses ArduPilot-style MAVLink binary log files using mmap for memory efficiency.
     """
+
     def __init__(self, filename: str):
         self.filename: str = filename
         self.logger = setup_logger(__name__)
@@ -103,15 +105,11 @@ class MavlogParser:
     def _parse_and_store_format_definition(self, position: int) -> Optional[Dict[str, Any]]:
         """Parse and store an FMT (Format Definition) message."""
         try:
-            _, _, msg_type, length, name_b, fmt_b, cols_b = struct.unpack_from(
-                "<2sBBB4s16s64s", self._data, position
-            )
+            _, _, msg_type, length, name_b, fmt_b, cols_b = struct.unpack_from("<2sBBB4s16s64s", self._data, position)
 
             name = name_b.split(b"\x00", 1)[0].decode("ascii", "ignore").strip()
             fmt = fmt_b.split(b"\x00", 1)[0].decode("ascii", "ignore").strip()
-            cols = [
-                c.strip() for c in cols_b.split(b"\x00", 1)[0].decode("ascii", "ignore").split(",") if c.strip()
-            ]
+            cols = [c.strip() for c in cols_b.split(b"\x00", 1)[0].decode("ascii", "ignore").split(",") if c.strip()]
 
             if not (name and fmt and cols):
                 return None
@@ -129,7 +127,7 @@ class MavlogParser:
             return {
                 "mavpackettype": "FMT",
                 "Type": msg_type,
-                **{k : v if not isinstance(v, list) else ','.join(v) for k, v in fmt_def.items() if k != 'Struct'}
+                **{k: v if not isinstance(v, list) else ",".join(v) for k, v in fmt_def.items() if k != "Struct"},
             }
 
         except Exception as e:
@@ -143,7 +141,8 @@ class MavlogParser:
             try:
                 if isinstance(val, bytes):
                     decoded[col] = (
-                        val if (f_char == "Z" and col in BYTES_FIELDS)
+                        val
+                        if (f_char == "Z" and col in BYTES_FIELDS)
                         else val.rstrip(b"\x00").decode("ascii", "ignore")
                     )
                 elif f_char in SCALE_FACTOR_FIELDS:

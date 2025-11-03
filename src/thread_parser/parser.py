@@ -1,17 +1,10 @@
-import struct
 import mmap
-from typing import Optional, Dict, Any, Iterator, List
+import struct
+from typing import Any, Dict, Iterator, List, Optional
+
+from src.utils.constants import (BYTES_FIELDS, FMT_STRUCT, FORMAT_MAPPING, FORMAT_MSG_LENGTH, FORMAT_MSG_TYPE,
+                                 LATITUDE_LONGITUDE_FORMAT, MSG_HEADER, SCALE_FACTOR_FIELDS)
 from src.utils.logger import setup_logger
-from src.utils.constants import (
-    MSG_HEADER,
-    FORMAT_MAPPING,
-    FORMAT_MSG_TYPE,
-    FORMAT_MSG_LENGTH,
-    SCALE_FACTOR_FIELDS,
-    LATITUDE_LONGITUDE_FORMAT,
-    BYTES_FIELDS,
-    FMT_STRUCT,
-)
 
 _STRUCT_CACHE: Dict[str, struct.Struct] = {}
 
@@ -155,7 +148,7 @@ class Parser:
                     if f_char == "Z" and col in BYTES_FIELDS:
                         decoded[col] = val
                     else:
-                        decoded[col] = val.rstrip(b"\x00").decode("ascii", "ignore")
+                        decoded[col] = val.rstrip(bytes_data"\x00").decode("ascii", "ignore")
                 elif f_char in SCALE_FACTOR_FIELDS:
                     decoded[col] = val / 100.0
                 elif f_char == LATITUDE_LONGITUDE_FORMAT:
