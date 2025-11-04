@@ -7,7 +7,8 @@ from struct import Struct
 from typing import Any, Dict, List, Optional, Tuple
 
 from src.bin_parser.parser import Parser
-from src.utils.constants import FORMAT_MAPPING, MSG_HEADER
+from src.utils.constants import FORMAT_MAPPING
+from src.utils.parser_utils import split_to_chunks
 from src.utils.logger import setup_logger
 
 
@@ -23,19 +24,6 @@ class MultiprocessParser:
         self.max_workers: int = max_workers if max_workers else os.cpu_count() or 4
         self.logger = setup_logger(os.path.basename(__file__))
 
-    def _split_to_chunks(self, parser: Parser) -> List[Tuple[int, int]]:
-        """Split the file into chunks aligned to message headers."""
-        file_size: int = os.path.getsize(self.filename)
-        chunk_size: int = max(1, file_size // self.max_workers)
-        chunks: List[Tuple[int, int]] = []
-        start_index: int = 0
-        while start_index < file_size:
-            tentative_end: int = min(start_index + chunk_size, file_size)
-            next_header: int = parser.data.find(MSG_HEADER, tentative_end)
-            end_index: int = next_header if next_header != -1 else file_size
-            chunks.append((start_index, end_index))
-            start_index = end_index
-        return chunks
 
     @staticmethod
     def _process_chunk(
@@ -59,7 +47,7 @@ class MultiprocessParser:
         try:
             with Parser(self.filename) as parser:
                 list(parser.messages("FMT"))
-                chunks = self._split_to_chunks(parser)
+                chunks = split_to_chunks(self.filename, self.max_workers, parser)
                 fmt_defs = {
                     msg_id: {
                         "Name": fmt["Name"],
@@ -100,7 +88,7 @@ if __name__ == "__main__":
     import time
 
     start_time = time.time()
-    processor = MultiprocessParser(r"C:\Users\ootb\Downloads\log_file_test_01.bin")
+    processor = MultiprocessParser(r"/Users/shlomo/Downloads/log_file_test_01.bin")
     my_messages = processor.process_all()
     print(f"Total messages: {len(my_messages)}")
     print(f"TIME: {time.time() - start_time}")

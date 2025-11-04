@@ -181,7 +181,7 @@ if __name__ == "__main__":
     import time
 
     start = time.time()
-    path = r"C:\Users\ootb\Downloads\log_file_test_01.bin"
+    path = r"/Users/shlomo/Downloads/log_file_test_01.bin"
 
     with Parser(path) as parser:
         count = sum(1 for _ in parser.messages())

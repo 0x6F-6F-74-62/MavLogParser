@@ -1,19 +1,18 @@
 import mmap
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, Tuple
+import os
 
-from src.thread_parser.parser import Parser
+from src.bin_parser.parser import Parser
 from src.utils.constants import MSG_HEADER
 from src.utils.logger import setup_logger
 
 
 class ThreadedLogProcessor:
-    def __init__(self, filename: str, chunk_size_mb: int = 100, max_threads: int = 4, overlap_bytes: int = 128):
+    def __init__(self, filename: str, max_threads: int = 4):
         self.filename: str = filename
-        self.chunk_size_bytes: int = chunk_size_mb * 1024 * 1024
         self.max_threads: int = max_threads
-        self.overlap_bytes: int = overlap_bytes
-        self.logger = setup_logger(__name__)
+        self.logger = setup_logger(os.path.basename(__file__))
 
     def _split_file_into_chunks(self, parser: Parser) -> List[Tuple[int, int]]:
         if parser._data is None:
@@ -111,7 +110,7 @@ if __name__ == "__main__":
     start = time.time()
 
     processor = ThreadedLogProcessor(
-        r"C:\Users\ootb\Downloads\log_file_test_01.bin",
+        r"/Users/shlomo/Downloads/log_file_test_01.bin",
         chunk_size_mb=50,
     )
     messages = processor.process_all()
