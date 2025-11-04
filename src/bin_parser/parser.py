@@ -189,3 +189,6 @@ if __name__ == "__main__":
     print(f"\nFormats: {len(parser.format_defs)}")
     print(f"Total messages: {count:,}")
     print(f"Time: {time.time() - start:.3f}s")
+
+
+
