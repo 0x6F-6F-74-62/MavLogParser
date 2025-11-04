@@ -90,8 +90,8 @@ class Parser:
                     break
 
                 unpacked: tuple = format_defs["Struct"].unpack_from(self.data, position + 3)
-                message: Dict[str, Any] = self._decode_messages(format_defs, unpacked)
-                message["mavpackettype"] = format_defs["Name"]
+                message: Dict[str, Any] = self._decode_messages(format_defs["Name"], format_defs, unpacked)
+                # message["mavpackettype"] = format_defs["Name"]
 
                 yield message
                 self.offset = message_end
@@ -141,7 +141,7 @@ class Parser:
                 "Name": name,
                 "Length": length,
                 "Format": format_def,
-                "Columns": cols,
+                "Columns": ",".join(cols),
             }
 
         except Exception as e:
@@ -149,9 +149,9 @@ class Parser:
             return None
 
     @staticmethod
-    def _decode_messages(format_defs: dict, unpacked: tuple) -> dict:
+    def _decode_messages(msg_type: str, format_defs: dict, unpacked: tuple) -> dict:
         """Decode fields according to format definition."""
-        decoded: Dict[str, Any] = {}
+        decoded: Dict[str, Any] = {"mavpackettype": msg_type}
         for fmt, col, val in zip(format_defs["Format"], format_defs["Columns"], unpacked):
             try:
                 if isinstance(val, bytes):

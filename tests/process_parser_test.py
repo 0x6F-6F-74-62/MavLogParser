@@ -1,10 +1,10 @@
 import math
 from pymavlink import mavutil
 import pytest
+# from src.bin_parser.parallel_parser import ParallelBinParser
+from src.bin_parser.parallel_parser import ParallelParser
 
-from src.synchronous_parser.mavlog_parser import MavlogParser
-
-LOG_FILE_PATH = r"C:\Users\ootb\Downloads\log_file_test_01.bin"
+LOG_FILE_PATH = r"/Users/shlomo/Downloads/log_file_test_01.bin"
 
 
 def mavlink_messages(file_path):
@@ -60,8 +60,8 @@ def _print_mismatch(idx, pmsg, pymav):
 
 
 def test_mavlog_parser_matches_pymavlink_exact_nan_equal():
-    with MavlogParser(LOG_FILE_PATH) as parser:
-        parser_msgs = parser.get_all_messages()
+    parser = ParallelParser(LOG_FILE_PATH)
+    parser_msgs = parser.process_all()
 
     pymav_msgs = list(mavlink_messages(LOG_FILE_PATH))
 

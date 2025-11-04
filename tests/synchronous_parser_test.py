@@ -2,11 +2,11 @@ import math
 from pymavlink import mavutil
 import pytest
 
-from src.synchronous_parser.mavlog_parser import MavlogParser
+from src.bin_parser.parser import Parser
 
 
 
-LOG_FILE_PATH = r"C:\Users\ootb\Downloads\log_file_test_01.bin"
+LOG_FILE_PATH = r"/Users/shlomo/Downloads/log_file_test_01.bin"
 
 
 
@@ -34,8 +34,8 @@ def dicts_equal(d1, d2):
             return False
     return True
 
-def test_mavlog_parser_matches_pymavlink():
-    with MavlogParser(LOG_FILE_PATH) as parser:
+def test_parser_matches_pymavlink():
+    with Parser(LOG_FILE_PATH) as parser:
         parser_msgs = parser.get_all_messages()
 
     pymav_msgs = list(mavlink_messages(LOG_FILE_PATH))
