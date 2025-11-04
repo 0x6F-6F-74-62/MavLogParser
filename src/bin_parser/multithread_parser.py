@@ -1,107 +1,82 @@
-import mmap
+"""Module for multithreaded parsing of binary log files."""
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, Tuple
 import os
+import heapq
 
 from src.bin_parser.parser import Parser
-from src.utils.constants import MSG_HEADER
+from src.utils.parser_utils import split_to_chunks
 from src.utils.logger import setup_logger
 
 
-class ThreadedLogProcessor:
+class ThreadParser:
+    """
+    Processes large MAVLink binary log files (.BIN) using multithreading.
+    Splits the file into aligned chunks and uses multiple threads for faster parsing.
+    """
     def __init__(self, filename: str, max_threads: int = 4):
         self.filename: str = filename
         self.max_threads: int = max_threads
         self.logger = setup_logger(os.path.basename(__file__))
 
-    def _split_file_into_chunks(self, parser: Parser) -> List[Tuple[int, int]]:
-        if parser._data is None:
-            raise RuntimeError("File must be opened before splitting.")
-        data = parser._data
-        total_size = len(data)
-        chunks: List[Tuple[int, int]] = []
-        start_offset = 0
-        find = data.find
-
-        while start_offset < total_size:
-            header_pos = find(MSG_HEADER, start_offset)
-            if header_pos == -1:
-                break
-            end_offset = header_pos + self.chunk_size_bytes
-            if end_offset > total_size:
-                end_offset = total_size
-            else:
-                next_header = find(MSG_HEADER, end_offset)
-                if next_header != -1:
-                    end_offset = next_header
-            chunks.append((header_pos, end_offset))
-            start_offset = end_offset
-        return chunks
 
     @staticmethod
-    def _process_chunk_segment(
-        filename: str,
-        start_offset: int,
-        end_offset: int,
-        fmt_defs: Dict[int, Dict[str, Any]],
-        requested_message_type: Optional[str],
-    ) -> List[Dict[str, Any]]:
+    def _process_chunk(
+            filename: str, chunk_range: Tuple[int, int], format_defs: Dict[int, Dict[str, Any]],
+            message_type: Optional[str]) -> List[Dict[str, Any]]:
+        """
+        Process a chunk of the log file and return messages.
+        """
         try:
-            with open(filename, "rb") as fobj, mmap.mmap(fobj.fileno(), 0, access=mmap.ACCESS_READ) as mem_map:
-                parser = Parser(filename)
-                parser._data = mem_map
-                parser._offset = start_offset
-                parser._format_definitions = fmt_defs
-                messages: List[Dict[str, Any]] = []
-                for msg in parser.messages(requested_message_type, end_offset):
-                    messages.append(msg)
-                messages.sort(key=lambda m: m.get("TimeUS", 0))
+            with Parser(filename) as parser:
+                parser.offset = chunk_range[0]
+                parser.format_defs = format_defs
+                messages: List[Dict[str, Any]] = list(parser.messages(message_type, end_index=chunk_range[1]))
                 return messages
-        except Exception as err:
-            print(f"[Thread chunk {start_offset}-{end_offset}] Error: {err}")
-            return []
+        except Exception as e:
+            print(f"[Thread chunk {chunk_range[0]}-{chunk_range[1]}] Error: {e}")
+            raise RuntimeError(f"Error processing chunk {chunk_range}: {e}")
 
     def process_all(self, message_type: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Process the entire log file in parallel and return sorted messages.
+        """
         try:
             with Parser(self.filename) as parser:
-                for _ in parser.messages("FMT"):
-                    pass
-                chunks = self._split_file_into_chunks(parser)
+                list(parser.messages("FMT"))
+                chunks = split_to_chunks(self.filename, self.max_threads, parser)
                 fmt_defs = {
                     msg_id: {
-                        "Name": fd["Name"],
-                        "Length": fd["Length"],
-                        "Format": fd["Format"],
-                        "Columns": fd["Columns"],
-                        "Struct": fd["Struct"],
+                        "Name": fmt["Name"],
+                        "Length": fmt["Length"],
+                        "Format": fmt["Format"],
+                        "Columns": fmt["Columns"],
+                        "Struct": fmt["Struct"],
                     }
-                    for msg_id, fd in parser._format_definitions.items()
-                }
+                    for msg_id, fmt in parser.format_defs.items()}
 
             if not chunks:
-                return []
-
+                raise RuntimeError("No chunks to parse")
+            chunks_count = len(chunks)
             self.logger.info(f"Processing {len(chunks)} chunks using {self.max_threads} threads...")
 
-            results_per_chunk: List[List[Dict[str, Any]]] = []
             with ThreadPoolExecutor(max_workers=self.max_threads) as executor:
-                futures = [
-                    executor.submit(self._process_chunk_segment, self.filename, start, end, fmt_defs, message_type)
-                    for start, end in chunks
-                ]
-                for future in futures:
-                    results_per_chunk.append(future.result())
+                sorted_chunks = executor.map(
+                    ThreadParser._process_chunk,
+                    [self.filename] * chunks_count,
+                    chunks,
+                    [fmt_defs] * chunks_count,
+                    [message_type] * chunks_count,
+                    chunksize=max(1, chunks_count // self.max_threads),
+                )
 
-            merged: List[Dict[str, Any]] = []
-            for segment in results_per_chunk:
-                merged.extend(segment)
-            merged.sort(key=lambda m: m.get("TimeUS", 0))
+            results = list(heapq.merge(*sorted_chunks, key=lambda x: x.get("TimeUS", 0)))
 
-            self.logger.info(f"Total messages parsed: {len(merged):,}")
-            return merged
+            self.logger.info(f"Total messages parsed: {len(results):,}")
+            return results
         except Exception as e:
             self.logger.error(f"Error in threaded processing: {e}")
-            return []
+            raise RuntimeError(f"Error in threaded processing: {e}")
 
 
 if __name__ == "__main__":
@@ -109,9 +84,8 @@ if __name__ == "__main__":
 
     start = time.time()
 
-    processor = ThreadedLogProcessor(
-        r"/Users/shlomo/Downloads/log_file_test_01.bin",
-        chunk_size_mb=50,
+    processor = ThreadParser(
+        r"/Users/shlomo/Downloads/log_file_test_01.bin", max_threads=8
     )
     messages = processor.process_all()
     print(f"Total messages: {len(messages)}")
