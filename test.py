@@ -1,18 +1,18 @@
 
 from pymavlink import mavutil
-from business_logic.bin_parser.parallel_parser import ParallelParser
+from business_logic.bin_parser.parallel import ParallelParser
 
 if __name__ == "__main__":
     path = r"/Users/shlomo/Downloads/log_file_test_01.bin"
     pyma=[]
-    log = mavutil.mavlink_connection(r"/Users/shlomo/Downloads/log_file_test_01.bin",dialect="ardupilotmega")
+    log = mavutil.mavlink_connection(path,dialect="ardupilotmega")
     while True:
         msg = log.recv_match()
         if msg is None:
             break
         pyma.append(msg.to_dict())
     counter =0
-    processor = ParallelParser(r"/Users/shlomo/Downloads/log_file_test_01.bin", executor_type="process")
+    processor = ParallelParser(path, executor_type="process")
     my_messages = processor.process_all()
     binr=my_messages
 
