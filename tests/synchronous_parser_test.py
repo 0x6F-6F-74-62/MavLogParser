@@ -2,7 +2,7 @@ import math
 from pymavlink import mavutil
 import pytest
 
-from src.bin_parser.parser import Parser
+from business_logic.bin_parser.parser import Parser
 
 
 

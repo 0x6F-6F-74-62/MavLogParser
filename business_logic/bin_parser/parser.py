@@ -5,7 +5,7 @@ import os
 import struct
 from typing import Any, Dict, Iterator, List, Optional
 
-from src.utils.constants import (
+from business_logic.utils.constants import (
     BYTES_FIELDS,
     FMT_STRUCT,
     FORMAT_MAPPING,
@@ -15,7 +15,7 @@ from src.utils.constants import (
     MSG_HEADER,
     SCALE_FACTOR_FIELDS,
 )
-from src.utils.logger import setup_logger
+from business_logic.utils.logger import setup_logger
 
 
 class Parser:
@@ -91,7 +91,6 @@ class Parser:
 
                 unpacked: tuple = format_defs["Struct"].unpack_from(self.data, position + 3)
                 message: Dict[str, Any] = self._decode_messages(format_defs["Name"], format_defs, unpacked)
-                # message["mavpackettype"] = format_defs["Name"]
 
                 yield message
                 self.offset = message_end
@@ -171,24 +170,6 @@ class Parser:
     def get_all_messages(self, message_type: Optional[str] = None) -> List[Dict[str, Any]]:
         """Return all messages of the specified type (or all messages if None)."""
         return list(self.messages(message_type))
-
-    def reset(self):
-        """Reset parser offset to beginning."""
-        self.offset: int = 0
-
-
-if __name__ == "__main__":
-    import time
-
-    start = time.time()
-    path = r"/Users/shlomo/Downloads/log_file_test_01.bin"
-
-    with Parser(path) as parser:
-        count = sum(1 for _ in parser.messages())
-
-    print(f"\nFormats: {len(parser.format_defs)}")
-    print(f"Total messages: {count:,}")
-    print(f"Time: {time.time() - start:.3f}s")
 
 
 

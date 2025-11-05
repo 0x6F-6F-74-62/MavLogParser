@@ -1,8 +1,7 @@
 import math
 from pymavlink import mavutil
 import pytest
-# from src.bin_parser.parallel_parser import ParallelBinParser
-from src.bin_parser.parallel_parser import ParallelParser
+from business_logic.bin_parser.parallel_parser import ParallelParser
 
 LOG_FILE_PATH = r"/Users/shlomo/Downloads/log_file_test_01.bin"
 
