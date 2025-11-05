@@ -3,7 +3,9 @@ import os
 from datetime import datetime
 
 
-def setup_logger(name: str, log_level=logging.INFO, log_to_file: bool = True, log_dir: str = "logs") -> logging.Logger:
+def setup_logger(
+    name: str, log_level: int = logging.INFO, log_to_file: bool = True, log_dir: str = "logs"
+) -> logging.Logger:
     """
     Set up and configure a logger with optional file and console handlers.
     """
