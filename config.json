@@ -27,5 +27,6 @@
   "SCALE_FACTOR_FIELDS": ["c", "C", "e", "E"],
   "LATITUDE_LONGITUDE_FORMAT": "L",
   "BYTES_FIELDS": ["Data", "Blob", "Payload"],
-  "FMT_STRUCT": "<2sBBB4s16s64s"
+  "FMT_STRUCT": "<2sBBB4s16s64s",
+  "LOG_FILE_PATH": "/Users/shlomo/Downloads/log_file_test_01.bin"
 }

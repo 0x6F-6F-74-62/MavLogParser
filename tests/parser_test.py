@@ -1,12 +1,17 @@
 import math
 from pymavlink import mavutil
 import pytest
+import json
 
-from business_logic.bin_parser.parser import Parser
+from business_logic.parser import Parser
 
 
 
-LOG_FILE_PATH = r"/Users/shlomo/Downloads/log_file_test_01.bin"
+
+with open("config.json", "r") as f:
+    config_data = json.load(f)
+
+LOG_FILE_PATH = rf"{config_data.get("LOG_FILE_PATH")}"
 
 
 

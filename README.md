@@ -10,7 +10,7 @@ A Python module for parsing MAVLink Binary Log (`.BIN`) files with support for s
 - [Quick Start](#quick-start)
 - [Detailed Guide](#detailed-guide)
 - [Configuration](#configuration)
-
+- [Testing](#testing)
 ---
 
 ## Overview
@@ -56,7 +56,7 @@ pip install pymavlink
 ### Quick Example - Parser
 
 ```python
-from business_logic.bin_parser.parser import Parser
+from business_logic.parser import Parser
 
 # Read all messages from file
 with Parser("flight_log.BIN") as parser:
@@ -73,7 +73,7 @@ with Parser("flight_log.BIN") as parser:
 ### Quick Example - ParallelParser
 
 ```python
-from business_logic.bin_parser.parallel import ParallelParser
+from business_logic.parallel import ParallelParser
 
 # Read all messages from file
 parser = ParallelParser("large_flight_log.BIN", executor_type="process")
@@ -89,7 +89,7 @@ print(f"Parsed {len(messages)} IMU messages")
 ### Quick Example - PymavlinkParser
 
 ```python
-from business_logic.bin_parser.mavlink import PymavlinkParser
+from business_logic.mavlink import PymavlinkParser
 
 with PymavlinkParser("flight_log.BIN") as parser:
     # Using generator (memory efficient)
@@ -346,4 +346,56 @@ Each message is returned as a dictionary with the following structure:
 }
 ```
 ---
+
+## Testing
+
+The module includes comprehensive tests that validate parser accuracy by comparing results against the official pymavlink library.
+
+### Test Files
+
+- **`parser_test.py`** - Tests for the basic Parser
+- **`parallel_test.py`** - Tests for the ParallelParser
+
+### Running Tests
+
+```bash
+# Run all tests
+python -m pytest tests/
+
+# Run specific test file
+python -m pytest tests/parser_test.py
+python -m pytest tests/parallel_test.py
+
+# Run with verbose output
+python -m pytest tests/ -v
+
+# Run with detailed output
+python -m pytest tests/ -s
+```
+
+### Test Configuration
+
+Tests use `config.json` for the log file path:
+
+```json
+{
+  "LOG_FILE_PATH": "path/to/your/test_log.BIN",
+  ...
+}
+```
+
+Make sure to set a valid `.BIN` file path before running tests.
+
+### What the Tests Validate
+
+The tests perform comprehensive validation:
+
+1. **Message Count**: Ensures parser extracts the exact same number of messages as pymavlink
+2. **Message Content**: Validates every field in every message matches pymavlink output
+3. **Field Names**: Checks all keys/field names are identical
+4. **Field Values**: Compares all values with special handling for:
+   - **NaN values**: Treats `NaN == NaN` as `True` (mathematically different but logically equivalent)
+   - **All data types**: Strings, integers, floats, bytes
+5. **Message Order**: Confirms messages are returned in chronological order
+
 

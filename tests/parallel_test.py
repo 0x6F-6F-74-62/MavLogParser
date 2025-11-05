@@ -1,9 +1,18 @@
 import math
 from pymavlink import mavutil
 import pytest
-from business_logic.bin_parser.parallel import ParallelParser
+import json
 
-LOG_FILE_PATH = r"/Users/shlomo/Downloads/log_file_test_01.bin"
+from business_logic.parallel import ParallelParser
+
+
+
+
+
+with open("config.json", "r") as f:
+    config_data = json.load(f)
+
+LOG_FILE_PATH = rf"{config_data.get("LOG_FILE_PATH")}"
 
 
 def mavlink_messages(file_path):

@@ -101,11 +101,9 @@ class Parser:
                 self.offset = position + 1
                 continue
 
-    @staticmethod
-    def _bytes_to_ascii(bytes_data: bytes) -> str:
-        """Convert null-terminated bytes to ASCII string."""
-        null = bytes_data.find(0)
-        return bytes_data[: null if null != -1 else None].decode("ascii", "ignore").strip()
+    def get_all_messages(self, message_type: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Return all messages of the specified type (or all messages if None)."""
+        return list(self.messages(message_type))
 
     def _extract_format_def(self, position: int) -> Optional[Dict[str, Any]]:
         """Parse and store an FMT (Format Definition) message."""
@@ -147,6 +145,15 @@ class Parser:
             self.logger.error(f"Error parsing FMT at offset {position}: {e}")
             return None
 
+
+    @staticmethod
+    def _bytes_to_ascii(bytes_data: bytes) -> str:
+        """Convert null-terminated bytes to ASCII string."""
+        null = bytes_data.find(0)
+        return bytes_data[: null if null != -1 else None].decode("ascii", "ignore").strip()
+
+
+
     @staticmethod
     def _decode_messages(msg_type: str, format_defs: dict, unpacked: tuple) -> dict:
         """Decode fields according to format definition."""
@@ -167,9 +174,7 @@ class Parser:
                 decoded[col] = None
         return decoded
 
-    def get_all_messages(self, message_type: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Return all messages of the specified type (or all messages if None)."""
-        return list(self.messages(message_type))
+
 
 
 

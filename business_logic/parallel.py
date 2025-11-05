@@ -4,7 +4,7 @@ import os
 from struct import Struct
 from typing import Any, Dict, List, Optional, Tuple, Literal
 
-from business_logic.bin_parser.parser import Parser
+from business_logic.parser import Parser
 from business_logic.utils.logger import setup_logger
 from business_logic.utils.constants import MSG_HEADER, FORMAT_MAPPING, FORMAT_MSG_TYPE
 
