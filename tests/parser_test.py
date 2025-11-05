@@ -1,27 +1,20 @@
 import math
-from pymavlink import mavutil
 import pytest
 import json
+import time
 
 from business_logic.parser import Parser
-
+from business_logic.mavlink import Mavlink
 
 
 
 with open("config.json", "r") as f:
     config_data = json.load(f)
 
+
 LOG_FILE_PATH = rf"{config_data.get("LOG_FILE_PATH")}"
 
 
-
-def mavlink_messages(file_path):
-    mlog = mavutil.mavlink_connection(file_path, dialect="ardupilotmega")
-    while True:
-        msg = mlog.recv_match(blocking=False)
-        if msg is None:
-            break
-        yield msg.to_dict()
 
 
 def equal_ignore_nan(v1, v2):
@@ -40,10 +33,18 @@ def dicts_equal(d1, d2):
     return True
 
 def test_parser_matches_pymavlink():
+    parser_start = time.time()
     with Parser(LOG_FILE_PATH) as parser:
         parser_msgs = parser.get_all_messages()
+    parser_end = time.time()
 
-    pymav_msgs = list(mavlink_messages(LOG_FILE_PATH))
+    mavlink_start = time.time()
+    with Mavlink(LOG_FILE_PATH) as pymav_parser:
+        pymav_msgs = pymav_parser.get_all_messages()
+    mavlink_end = time.time()
+
+    print(f"\nParser processed {len(parser_msgs)} messages in {parser_end - parser_start:.2f} seconds.")
+    print(f"Pymavlink processed {len(pymav_msgs)} messages in {mavlink_end - mavlink_start:.2f} seconds.")
 
     assert len(parser_msgs) == len(pymav_msgs), \
         f"Message count mismatch: parser={len(parser_msgs)}, pymavlink={len(pymav_msgs)}"

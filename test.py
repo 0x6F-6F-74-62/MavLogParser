@@ -1,5 +1,6 @@
 
 from pymavlink import mavutil
+from business_logic.parallel import ParallelParser
 from business_logic.parser import Parser
 if __name__ == "__main__":
     path = r"/Users/shlomo/Downloads/log_file_test_01.bin"
@@ -11,10 +12,10 @@ if __name__ == "__main__":
             break
         pyma.append(msg.to_dict())
     counter =0
-    # processor = ParallelParser(path, executor_type="process")
-    # my_messages = processor.process_all()
-    with Parser(path) as processor:
-        my_messages = processor.get_all_messages()
+    processor = ParallelParser(path, executor_type="thread")
+    my_messages = processor.process_all()
+    # with Parser(path) as processor:
+    #     my_messages = processor.get_all_messages()
     binr=my_messages
 
     assert len(pyma)==len(binr)

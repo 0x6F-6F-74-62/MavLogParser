@@ -2,7 +2,7 @@ from pymavlink import mavutil
 import os
 from typing import Any, Dict, Iterator, Optional
 
-class PymavlinkParser:
+class Mavlink:
     """
     MAVLink Binary Log Parser (.BIN) using pymavlink.
     Streams MAVLink messages as dictionaries using a generator.
@@ -12,11 +12,11 @@ class PymavlinkParser:
         self.filename: str = filename
         self._mavlog = None
 
-    def __enter__(self) -> "PymavlinkParser":
+    def __enter__(self) -> "Mavlink":
         """Open the MAVLink log file using pymavlink."""
         if not os.path.exists(self.filename):
             raise FileNotFoundError(f"File not found: {self.filename}")
-        self._mavlog = mavutil.mavlink_connection(self.filename)
+        self._mavlog = mavutil.mavlink_connection(self.filename, dialect="ardupilotmega")
         return self
 
     def __exit__(self, *args) -> None:
@@ -41,4 +41,4 @@ class PymavlinkParser:
 
     def get_all_messages(self, message_type: Optional[str] = None):
         """Return all messages as a list (uses the generator internally)."""
-        return list(self.messages(message_type))
+        return [msg for msg in self.messages(message_type)]

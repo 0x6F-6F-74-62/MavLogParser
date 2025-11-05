@@ -89,9 +89,9 @@ print(f"Parsed {len(messages)} IMU messages")
 ### Quick Example - PymavlinkParser
 
 ```python
-from business_logic.mavlink import PymavlinkParser
+from business_logic.mavlink import Mavlink
 
-with PymavlinkParser("flight_log.BIN") as parser:
+with Mavlink("flight_log.BIN") as parser:
     # Using generator (memory efficient)
     for msg in parser.messages(message_type="ATTITUDE"):
         print(f"Roll: {msg['Roll']}, Pitch: {msg['Pitch']}")
