@@ -1,6 +1,7 @@
 from pymavlink import mavutil
 import os
-from typing import Any, Dict, Iterator, Optional
+from typing import Any, Dict, Iterator, Optional, Type, List
+
 
 class Mavlink:
     """
@@ -19,7 +20,9 @@ class Mavlink:
         self._mavlog = mavutil.mavlink_connection(self.filename, dialect="ardupilotmega")
         return self
 
-    def __exit__(self, *args) -> None:
+    def __exit__(
+        self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[Any]
+    ) -> None:
         """Close the MAVLink log."""
         if self._mavlog:
             self._mavlog.close()
@@ -39,6 +42,6 @@ class Mavlink:
                 break
             yield msg.to_dict()
 
-    def get_all_messages(self, message_type: Optional[str] = None):
+    def get_all_messages(self, message_type: Optional[str] = None) -> List[Dict[str, Any]]:
         """Return all messages as a list (uses the generator internally)."""
         return [msg for msg in self.messages(message_type)]

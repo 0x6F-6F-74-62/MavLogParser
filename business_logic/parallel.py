@@ -1,8 +1,10 @@
 """Parallel MAVLink Binary Log Parser."""
+
+import mmap
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 import os
 from struct import Struct
-from typing import Any, Dict, List, Optional, Tuple, Literal
+from typing import Any, Dict, List, Optional, Tuple, Literal, Type
 
 from business_logic.parser import Parser
 from business_logic.utils.logger import setup_logger
@@ -16,16 +18,16 @@ class ParallelParser:
     """
 
     def __init__(
-            self, filename: str, executor_type: Literal["process", "thread"] = "process",
-            max_workers: Optional[int] = None
+        self, filename: str, executor_type: Literal["process", "thread"] = "process", max_workers: Optional[int] = None
     ):
         """Initialize the ParallelParser."""
         self.filename: str = filename
         self.executor_type: Literal["process", "thread"] = executor_type
+        self.max_workers: int = 0
         if executor_type == "process":
-            self.max_workers: int = max_workers if max_workers else os.cpu_count() or 4
+            self.max_workers = max_workers if max_workers else os.cpu_count() or 4
         else:
-            self.max_workers: int = max_workers if max_workers else 16
+            self.max_workers = max_workers if max_workers else 16
         self.logger = setup_logger(os.path.basename(__file__))
 
     def process_all(self, message_type: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -35,15 +37,19 @@ class ParallelParser:
                 list(parser.messages("FMT"))
                 chunks = ParallelParser._split_to_chunks(parser, self.max_workers)
 
-                fmt_def = {
-                    msg_id: {
-                        "Name": fmt["Name"],
-                        "Length": fmt["Length"],
-                        "Format": fmt["Format"],
-                        "Columns": fmt["Columns"],
+                fmt_def = (
+                    {
+                        msg_id: {
+                            "Name": fmt["Name"],
+                            "Length": fmt["Length"],
+                            "Format": fmt["Format"],
+                            "Columns": fmt["Columns"],
+                        }
+                        for msg_id, fmt in parser.format_defs.items()
                     }
-                    for msg_id, fmt in parser.format_defs.items()
-                } if self.executor_type == "process" else parser.format_defs
+                    if self.executor_type == "process"
+                    else parser.format_defs
+                )
 
                 need_struct_rebuild = self.executor_type == "process"
 
@@ -64,16 +70,16 @@ class ParallelParser:
 
         except Exception as e:
             self.logger.error(f"Error in parallel processing: {e}")
-            raise RuntimeError(f"Error in parallel processing: {e}")
+            raise RuntimeError(f"Error in parallel processing: {e}") from e
 
     def _run_executor(
-            self,
-            executor_class,
-            chunks_count: int,
-            chunks: List[Tuple[int, int]],
-            fmt_def: Dict[int, Dict[str, Any]],
-            message_type: Optional[str],
-            need_struct_rebuild: bool = True,
+        self,
+        executor_class: Type[ProcessPoolExecutor] | Type[ThreadPoolExecutor],
+        chunks_count: int,
+        chunks: List[Tuple[int, int]],
+        fmt_def: Dict[int, Dict[str, Any]],
+        message_type: Optional[str],
+        need_struct_rebuild: bool = True,
     ) -> List[Dict[str, Any]]:
         """Process chunks using executor and merge results."""
         with executor_class(max_workers=self.max_workers) as executor:
@@ -92,16 +98,16 @@ class ParallelParser:
 
     @staticmethod
     def _process_chunk(
-            filename: str,
-            chunk_range: Tuple[int, int],
-            format_defs: Dict[int, Dict[str, Any]],
-            message_type: Optional[str],
-            need_struct_rebuild: bool = True,
+        filename: str,
+        chunk_range: Tuple[int, int],
+        format_defs: Dict[int, Dict[str, Any]],
+        message_type: Optional[str],
+        need_struct_rebuild: bool = True,
     ) -> List[Dict[str, Any]]:
         """Process a chunk of the log file and return messages."""
         try:
             if need_struct_rebuild:
-                for msg_id, fmt in format_defs.items():
+                for fmt in format_defs.values():
                     fmt["Struct"] = Struct("<" + "".join(FORMAT_MAPPING[char] for char in fmt["Format"]))
 
             with Parser(filename) as parser:
@@ -111,15 +117,20 @@ class ParallelParser:
                 return messages
 
         except Exception as e:
-            raise RuntimeError(f"Error processing chunk {chunk_range}: {e}")
+            raise RuntimeError(f"Error processing chunk {chunk_range}: {e}") from e
 
     @staticmethod
     def _split_to_chunks(parser: Parser, max_workers: int) -> List[Tuple[int, int]]:
         """Split the file into valid message-aligned chunks."""
-        data, fmt_defs = parser.data, parser.format_defs
-        size = len(data)
-        if not size:
+        if not parser.data:
             raise RuntimeError("File must be opened before splitting.")
+
+        data = parser.data
+        fmt_defs = parser.format_defs
+        size = len(data)
+
+        if size == 0:
+            raise RuntimeError("Log file is empty.")
 
         chunk_size = max(size // max_workers, 10 * 1024 * 1024)
         chunks, pos = [], 0
@@ -146,9 +157,9 @@ class ParallelParser:
         return chunks
 
     @staticmethod
-    def _is_valid_message_header(data: bytes, pos: int, fmt_defs: Dict[int, Dict[str, Any]]) -> bool:
+    def _is_valid_message_header(data: bytes | mmap.mmap, pos: int, fmt_defs: Dict[int, Dict[str, Any]]) -> bool:
         """Check if MSG_HEADER at pos marks a valid message start."""
-        if pos + 2 >= len(data) or data[pos:pos + 2] != MSG_HEADER:
+        if pos + 2 >= len(data) or data[pos : pos + 2] != MSG_HEADER:
             return False
 
         msg_id = data[pos + 2]
@@ -157,10 +168,3 @@ class ParallelParser:
 
         fmt = fmt_defs.get(msg_id)
         return bool(fmt and pos + fmt["Length"] <= len(data))
-
-
-
-
-
-
-

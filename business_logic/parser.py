@@ -3,7 +3,7 @@
 import mmap
 import os
 import struct
-from typing import Any, Dict, Iterator, List, Optional
+from typing import Any, Dict, Iterator, List, Optional, Type
 
 from business_logic.utils.constants import (
     BYTES_FIELDS,
@@ -43,7 +43,12 @@ class Parser:
             self.logger.error(f"Failed to open file '{self.filename}': {e}")
             raise
 
-    def __exit__(self, *args) -> None:
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[Any],
+    ) -> None:
         try:
             if self.data:
                 self.data.close()
@@ -76,21 +81,21 @@ class Parser:
                         yield format_defs
                     continue
 
-                format_defs: Optional[Dict[str, Any]] = self.format_defs.get(message_id)
-                if not format_defs:
+                msg_format: Optional[Dict[str, Any]] = self.format_defs.get(message_id)
+                if not msg_format:
                     self.offset = position + 1
                     continue
 
-                if message_type and format_defs["Name"] != message_type:
-                    self.offset = position + format_defs["Length"]
+                if message_type and msg_format["Name"] != message_type:
+                    self.offset = position + msg_format["Length"]
                     continue
 
-                message_end: int = position + format_defs["Length"]
+                message_end: int = position + msg_format["Length"]
                 if message_end > data_len:
                     break
 
-                unpacked: tuple = format_defs["Struct"].unpack_from(self.data, position + 3)
-                message: Dict[str, Any] = self._decode_messages(format_defs["Name"], format_defs, unpacked)
+                unpacked: tuple = msg_format["Struct"].unpack_from(self.data, position + 3)
+                message: Dict[str, Any] = self._decode_messages(msg_format["Name"], msg_format, unpacked)
 
                 yield message
                 self.offset = message_end
@@ -145,14 +150,11 @@ class Parser:
             self.logger.error(f"Error parsing FMT at offset {position}: {e}")
             return None
 
-
     @staticmethod
     def _bytes_to_ascii(bytes_data: bytes) -> str:
         """Convert null-terminated bytes to ASCII string."""
         null = bytes_data.find(0)
         return bytes_data[: null if null != -1 else None].decode("ascii", "ignore").strip()
-
-
 
     @staticmethod
     def _decode_messages(msg_type: str, format_defs: dict, unpacked: tuple) -> dict:
@@ -173,8 +175,3 @@ class Parser:
             except Exception:
                 decoded[col] = None
         return decoded
-
-
-
-
-
