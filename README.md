@@ -353,24 +353,20 @@ The module includes comprehensive tests that validate parser accuracy by compari
 
 ### Test Files
 
-- **`parser_test.py`** - Tests for the basic Parser
-- **`parallel_test.py`** - Tests for the ParallelParser
+- **`test.py`** - Tests for the basic Parser, ParallelParser with both executor types
+- **`test_utils`** - Utility functions for testing
 
 ### Running Tests
 
 ```bash
 # Run all tests
-python -m pytest tests/
-
-# Run specific test file
-python -m pytest tests/parser_test.py
-python -m pytest tests/parallel_test.py
+python -m pytest tests/test.py 
 
 # Run with verbose output
-python -m pytest tests/ -v
+python -m pytest tests/test.py -v
 
 # Run with detailed output
-python -m pytest tests/ -s
+python -m pytest tests/test.py -s
 ```
 
 ### Test Configuration
