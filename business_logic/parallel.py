@@ -136,7 +136,7 @@ class ParallelParser:
         chunks, pos = [], 0
 
         while True:
-            pos = data.find(MSG_HEADER, pos, min(size, 1000))
+            pos = data.find(MSG_HEADER, pos)
             if pos == -1:
                 raise RuntimeError("No valid message headers found in file.")
             if ParallelParser._is_valid_message_header(data, pos, fmt_defs):
