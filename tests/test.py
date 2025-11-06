@@ -1,6 +1,5 @@
 if __name__ == "__main__":
-    from  business_logic.parser import Parser
-    from business_logic.parallel import ParallelParser
+    from src.business_logic import ParallelParser
     from pymavlink import mavutil
     path = r"/Users/shlomo/Downloads/log_file_test_01.bin"
     pyma=[]
