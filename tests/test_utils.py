@@ -1,7 +1,6 @@
 import math
 import pytest
 
-
 def equal_ignore_nan(value_a, value_b):
     """Compare two values, treating NaN as equal."""
     if isinstance(value_a, float) and isinstance(value_b, float):
@@ -29,10 +28,10 @@ def compare_parser_outputs(reference_messages, test_messages, reference_name="Re
 
     for index, (test_msg, ref_msg) in enumerate(zip(test_messages, reference_messages)):
         if not dicts_equal(test_msg, ref_msg):
-            _report_mismatch(index, test_msg, ref_msg, reference_name, test_name)
+            report_mismatch(index, test_msg, ref_msg, reference_name, test_name)
 
 
-def _report_mismatch(index, test_msg, ref_msg, reference_name, test_name):
+def report_mismatch(index, test_msg, ref_msg, reference_name, test_name):
     """Detailed mismatch report when one message differs."""
     details = [f"\nMismatch at index {index}:"]
     for key in sorted(set(test_msg.keys()) | set(ref_msg.keys())):

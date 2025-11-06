@@ -36,7 +36,12 @@ class Parser:
         """Open and memory-map the MAVLink log file."""
         try:
             self._file = open(self.filename, "rb")
-            self.data = mmap.mmap(self._file.fileno(), 0, access=mmap.ACCESS_READ)
+            file_size = os.path.getsize(self.filename)
+            if file_size == 0:
+                self.logger.warning(f"File '{self.filename}' is empty.")
+                self.data = b""
+            else:
+                self.data = mmap.mmap(self._file.fileno(), 0, access=mmap.ACCESS_READ)
             self.logger.info(f"Opened file: {self.filename}")
             return self
         except Exception as e:
@@ -63,7 +68,7 @@ class Parser:
         """
         Generator yielding MAVLink messages as dictionaries.
         """
-        if not self.data:
+        if self.data is None:
             raise RuntimeError("Parser not initialized. Use 'with MavlogParser(...) as parser:'")
 
         data_len: int = len(self.data)

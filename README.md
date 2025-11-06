@@ -360,13 +360,13 @@ The module includes comprehensive tests that validate parser accuracy by compari
 
 ```bash
 # Run all tests
-python -m pytest tests/test.py 
+python -m pytest tests/ 
 
 # Run with verbose output
-python -m pytest tests/test.py -v
+python -m pytest tests/ -v
 
 # Run with detailed output
-python -m pytest tests/test.py -s
+python -m pytest tests/ -s
 ```
 
 ### Test Configuration

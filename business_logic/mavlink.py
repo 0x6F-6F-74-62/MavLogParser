@@ -45,3 +45,11 @@ class Mavlink:
     def get_all_messages(self, message_type: Optional[str] = None) -> List[Dict[str, Any]]:
         """Return all messages as a list (uses the generator internally)."""
         return [msg for msg in self.messages(message_type)]
+
+
+if __name__ == "__main__":
+    # Example usage
+    log_file = r"/Users/shlomo/Downloads/log_file_test_01.bin"
+    with Mavlink(log_file) as parser:
+        for message in parser.messages("FMT"):
+            print(message)
