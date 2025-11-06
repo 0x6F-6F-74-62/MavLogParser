@@ -1,8 +1,8 @@
 """Main entry point for MAVLink Binary Log Parser."""
-import json
+
 import os
 import sys
-from typing import List, Dict, Any, Optional, Literal
+from typing import Any, Dict, List, Literal, Optional
 
 from src.business_logic.parallel import ParallelParser
 from src.business_logic.parser import Parser
@@ -12,7 +12,7 @@ from src.utils.logger import setup_logger
 class CLIMenu:
     """Command-line interface for MAVLink log parsing."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the CLI with configuration."""
         self.logger = setup_logger(os.path.basename(__file__))
         self.file_path: Optional[str] = None
@@ -22,7 +22,7 @@ class CLIMenu:
         while True:
             file_path = input("Enter file path (or 'q' to quit): ").strip()
 
-            if file_path.lower() == 'q':
+            if file_path.lower() == "q":
                 sys.exit(0)
 
             if not file_path:
@@ -46,6 +46,8 @@ class CLIMenu:
     def _parse_synchronous(self, message_type: Optional[str] = None) -> List[Dict[str, Any]]:
         """Parse log file synchronously."""
         try:
+            if self.file_path is None:
+                raise RuntimeError("Error: File path cannot be empty.")
             with Parser(self.file_path) as parser:
                 messages = parser.get_all_messages(message_type)
                 self.logger.info(f"Parsed {len(messages):,} messages synchronously")
@@ -55,12 +57,12 @@ class CLIMenu:
             raise
 
     def _parse_parallel(
-            self,
-            executor_type: Literal["process", "thread"],
-            message_type: Optional[str] = None
+        self, executor_type: Literal["process", "thread"], message_type: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """Parse log file in parallel."""
         try:
+            if self.file_path is None:
+                raise RuntimeError("Error: File path cannot be empty.")
             parser = ParallelParser(self.file_path, executor_type=executor_type)
             messages = parser.process_all(message_type)
             self.logger.info(f"Parsed {len(messages):,} messages using {executor_type} pool")
@@ -108,8 +110,7 @@ class CLIMenu:
                 print("Invalid choice. Please try again.")
 
     def _handle_parsing_option(
-            self,
-            parse_method: Literal["sync", "process", "thread"]
+        self, parse_method: Literal["sync", "process", "thread"]
     ) -> Optional[List[Dict[str, Any]]]:
         """
         Handle a parsing option selected by the user.
@@ -163,4 +164,3 @@ class CLIMenu:
 
             else:
                 print("Invalid choice. Please try again.")
-

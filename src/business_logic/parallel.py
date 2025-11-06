@@ -1,14 +1,15 @@
 """Parallel MAVLink Binary Log Parser."""
 
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 import os
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from struct import Struct
-from typing import Any, Dict, List, Optional, Tuple, Literal, Type
+from typing import Any, Dict, List, Literal, Optional, Tuple, Type
 
 from src.business_logic.parser import Parser
-from src.utils.logger import setup_logger
-from src.utils.constants import MSG_HEADER, FORMAT_MAPPING
+from src.utils.constants import FORMAT_MAPPING, MSG_HEADER
 from src.utils.helpers import is_valid_message_header
+from src.utils.logger import setup_logger
+
 
 class ParallelParser:
     """
@@ -157,4 +158,3 @@ class ParallelParser:
             return chunks
         except Exception as e:
             raise RuntimeError(f"Error splitting to chunks: {e}") from e
-

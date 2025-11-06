@@ -15,8 +15,9 @@ from src.utils.constants import (
     MSG_HEADER,
     SCALE_FACTOR_FIELDS,
 )
-from src.utils.logger import setup_logger
 from src.utils.helpers import bytes_to_ascii
+from src.utils.logger import setup_logger
+
 
 class Parser:
     """
@@ -153,7 +154,6 @@ class Parser:
         except Exception as e:
             self.logger.error(f"Error parsing FMT at offset {position}: {e}")
             return None
-
 
     @staticmethod
     def _decode_messages(msg_type: str, format_defs: dict, unpacked: tuple) -> dict:

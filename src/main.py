@@ -3,7 +3,6 @@ import sys
 from src.business_logic.cli_menu import CLIMenu
 
 
-
 def main() -> None:
     """Main entry point."""
     try:
