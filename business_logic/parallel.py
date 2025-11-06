@@ -172,3 +172,11 @@ class ParallelParser:
         fmt = fmt_defs.get(msg_id)
         return bool(fmt and pos + fmt["Length"] <= len(data))
 
+if __name__ == "__main__":
+    import time
+    s = time.time()
+    path1 = r"/Users/shlomo/Downloads/log_file_test_01.bin"
+    pa = ParallelParser(path1)
+    pa.process_all("GPS")
+    e = time.time() - s
+    print(e)
