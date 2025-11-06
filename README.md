@@ -11,6 +11,8 @@ A Python module for parsing MAVLink Binary Log (`.BIN`) files with support for s
 - [Detailed Guide](#detailed-guide)
 - [Configuration](#configuration)
 - [Testing](#testing)
+- [CLI Menu](#cli-menu)
+
 ---
 
 ## Overview
@@ -26,17 +28,26 @@ This module provides three approaches for parsing MAVLink Binary Log files:
 ## Project Structure
 
 ```
-project/
-├── business_logic/
-│   ├── bin_parser/
+MavLogParser/
+├── src/
+│   ├── __main__.py             # Entry point for CLI
+│   ├── business_logic/
+│   │   ├── cli_menu.py         # Interactive CLI menu
 │   │   ├── parser.py           # Basic parser with mmap
 │   │   ├── parallel.py         # Parallel parser
 │   │   └── mavlink.py          # pymavlink wrapper
 │   └── utils/
 │       ├── constants.py        # MAVLink constants
+│       ├── helpers.py          # Helper functions
 │       └── logger.py           # Logging system
+├── tests/
+│   ├── conftest.py             # Pytest fixtures
+│   ├── test_parser.py          # Parser tests
+│   ├── test_parallel.py        # ParallelParser tests
+│   ├── test_utils.py           # Testing utilities
+│   └── compare_test.py         # Validation against pymavlink
 ├── config.json                 # MAVLink configuration
-└── logs/                       # Log directory
+└── logs/                       # Log directory (auto-created)
 ```
 
 ---
@@ -46,12 +57,40 @@ project/
 ### Prerequisites
 
 ```bash
+# Install required dependencies
 pip install pymavlink
+
+# Optional: Install testing dependencies
+pip install pytest
+```
+
+### Running the Application
+
+```bash
+# Run the interactive CLI menu
+python -m src
+
+# Or run directly
+python src/__main__.py
 ```
 
 ---
 
 ## Quick Start
+
+### Using the CLI Menu
+
+The easiest way to use the parser is through the interactive CLI:
+
+```bash
+python -m src
+```
+
+This will launch an interactive menu where you can:
+- Select a log file
+- Choose parsing method (synchronous, multiprocessing, or multithreading)
+- Filter by message type or parse all messages
+- View parsing results with performance metrics
 
 ### Quick Example - Parser
 
@@ -292,11 +331,86 @@ with PymavlinkParser("log.BIN") as parser:
 
 ---
 
+## CLI Menu
+
+The module includes an interactive command-line interface for easy parsing without writing code.
+
+### Features
+
+- **File selection**: Browse and validate log files
+- **Multiple parsing methods**: Choose between synchronous and parallel processing
+- **Message filtering**: Parse all messages or filter by specific type
+- **Real-time feedback**: See progress and results immediately
+- **Error handling**: Graceful error messages and recovery
+
+### Usage
+
+```bash
+# Launch the CLI
+python -m src
+```
+
+### Menu Options
+
+**Main Menu:**
+```
+==========================================
+   MAVLink Log Parser
+==========================================
+1. Synchronous parsing
+2. Parallel parsing (processes)
+3. Parallel parsing (threads)
+0. Exit
+==========================================
+```
+
+**Filter Menu:**
+```
+------------------------------------------
+   Parsing Options
+------------------------------------------
+1. Parse all messages
+2. Parse specific message type
+0. Back to main menu
+------------------------------------------
+```
+
+### Example Session
+
+```
+Welcome to MAVLink Log Parser!
+Enter file path (or 'q' to quit): /path/to/flight_log.BIN
+
+==========================================
+   MAVLink Log Parser
+==========================================
+1. Synchronous parsing
+2. Parallel parsing (processes)
+3. Parallel parsing (threads)
+0. Exit
+==========================================
+Enter your choice: 2
+
+------------------------------------------
+   Parsing Options
+------------------------------------------
+1. Parse all messages
+2. Parse specific message type
+0. Back to main menu
+------------------------------------------
+Enter your choice: 2
+Enter message type: GPS
+
+Successfully parsed 1,234 messages
+```
+
+---
+
 ## Configuration
 
 ### config.json File
 
-The module uses `config.json` to define MAVLink constants:
+The module uses `config.json` to define MAVLink constants. This file must be in the project root directory.
 
 ```json
 {
@@ -304,6 +418,7 @@ The module uses `config.json` to define MAVLink constants:
   "FORMAT_MSG_TYPE": 128,
   "FORMAT_MSG_LENGTH": 89,
   "FORMAT_MAPPING": {
+    "a": "32h",
     "b": "b",
     "B": "B",
     "h": "h",
@@ -312,22 +427,40 @@ The module uses `config.json` to define MAVLink constants:
     "I": "I",
     "f": "f",
     "d": "d",
+    "n": "4s",
+    "N": "16s",
+    "Z": "64s",
+    "c": "h",
+    "C": "H",
+    "e": "i",
+    "E": "I",
     "L": "i",
-    ...
+    "M": "B",
+    "q": "q",
+    "Q": "Q"
   },
   "SCALE_FACTOR_FIELDS": ["c", "C", "e", "E"],
   "LATITUDE_LONGITUDE_FORMAT": "L",
   "BYTES_FIELDS": ["Data", "Blob", "Payload"],
-  "FMT_STRUCT": "<2sBBB4s16s64s"
+  "FMT_STRUCT": "<2sBBB4s16s64s",
+  "LOG_FILE_PATH": "/path/to/your/test_log.BIN"
 }
 ```
 
 ### Important Settings
 
-- **`MSG_HEADER`**: Unique identifier for message start (hex)
+- **`MSG_HEADER`**: Unique identifier for message start (hex: "a395")
 - **`FORMAT_MAPPING`**: Mapping between format characters and struct types
 - **`SCALE_FACTOR_FIELDS`**: Fields requiring division by 100
 - **`LATITUDE_LONGITUDE_FORMAT`**: Fields requiring division by 10^7
+- **`LOG_FILE_PATH`**: Default log file path for testing
+
+### Path Resolution
+
+The module uses intelligent path resolution to find `config.json`:
+- Automatically locates the config file relative to the source files
+- Works whether running as a module (`python -m src`) or directly
+- No need to worry about working directory
 
 ---
 
@@ -345,6 +478,7 @@ Each message is returned as a dictionary with the following structure:
     ...                        # Additional fields by message type
 }
 ```
+
 ---
 
 ## Testing
@@ -353,34 +487,41 @@ The module includes comprehensive tests that validate parser accuracy by compari
 
 ### Test Files
 
-- **`test.py`** - Tests for the basic Parser, ParallelParser with both executor types
-- **`test_utils`** - Utility functions for testing
+- **`conftest.py`** - Pytest fixtures and test configuration
+- **`test_parser.py`** - Tests for the basic Parser
+- **`test_parallel.py`** - Tests for ParallelParser with both executor types
+- **`test_utils.py`** - Utility functions for testing
+- **`compare_test.py`** - Validation against pymavlink
 
 ### Running Tests
 
 ```bash
 # Run all tests
-python -m pytest tests/ 
+python -m pytest tests/
 
 # Run with verbose output
 python -m pytest tests/ -v
 
 # Run with detailed output
 python -m pytest tests/ -s
+
+# Run specific test file
+python -m pytest tests/test_parser.py
+
+# Run specific test
+python -m pytest tests/test_parser.py::test_parse_fmt_messages
 ```
 
 ### Test Configuration
 
-Tests use `config.json` for the log file path:
+Tests use `config.json` for the log file path. Make sure to set a valid `.BIN` file path:
 
 ```json
 {
-  "LOG_FILE_PATH": "path/to/your/test_log.BIN",
+  "LOG_FILE_PATH": "/path/to/your/test_log.BIN",
   ...
 }
 ```
-
-Make sure to set a valid `.BIN` file path before running tests.
 
 ### What the Tests Validate
 
@@ -393,5 +534,12 @@ The tests perform comprehensive validation:
    - **NaN values**: Treats `NaN == NaN` as `True` (mathematically different but logically equivalent)
    - **All data types**: Strings, integers, floats, bytes
 5. **Message Order**: Confirms messages are returned in chronological order
+6. **Edge Cases**: Tests empty files, corrupted data, malformed messages, and boundary conditions
+7. **Parallel Processing**: Validates that both process and thread executors produce identical results
 
+### Test Coverage
+
+- **Parser Tests**: 20+ test cases covering basic parsing, edge cases, and error handling
+- **ParallelParser Tests**: 25+ test cases covering chunking, parallel execution, and validation
+- **Integration Tests**: Comparison tests against pymavlink for all three parsing methods
 
