@@ -5,7 +5,7 @@ import os
 import struct
 from typing import Any, Dict, Iterator, List, Optional, Type
 
-from business_logic.utils.constants import (
+from src.utils.constants import (
     BYTES_FIELDS,
     FMT_STRUCT,
     FORMAT_MAPPING,
@@ -15,8 +15,8 @@ from business_logic.utils.constants import (
     MSG_HEADER,
     SCALE_FACTOR_FIELDS,
 )
-from business_logic.utils.logger import setup_logger
-
+from src.utils.logger import setup_logger
+from src.utils.helpers import bytes_to_ascii
 
 class Parser:
     """
@@ -38,8 +38,7 @@ class Parser:
             self._file = open(self.filename, "rb")
             file_size = os.path.getsize(self.filename)
             if file_size == 0:
-                self.logger.warning(f"File '{self.filename}' is empty.")
-                self.data = b""
+                raise RuntimeError("Empty MAVLink log file")
             else:
                 self.data = mmap.mmap(self._file.fileno(), 0, access=mmap.ACCESS_READ)
             self.logger.info(f"Opened file: {self.filename}")
@@ -123,8 +122,8 @@ class Parser:
             _, _, msg_type, length, name_bin, format_def_bin, columns_bin = struct.unpack_from(
                 FMT_STRUCT, self.data, position
             )
-            name: str = self._bytes_to_ascii(name_bin)
-            format_def: str = self._bytes_to_ascii(format_def_bin)
+            name: str = bytes_to_ascii(name_bin)
+            format_def: str = bytes_to_ascii(format_def_bin)
             cols: List[str] = [
                 c.strip() for c in columns_bin.split(b"\x00", 1)[0].decode("ascii", "ignore").split(",") if c.strip()
             ]
@@ -155,11 +154,6 @@ class Parser:
             self.logger.error(f"Error parsing FMT at offset {position}: {e}")
             return None
 
-    @staticmethod
-    def _bytes_to_ascii(bytes_data: bytes) -> str:
-        """Convert null-terminated bytes to ASCII string."""
-        null = bytes_data.find(0)
-        return bytes_data[: null if null != -1 else None].decode("ascii", "ignore").strip()
 
     @staticmethod
     def _decode_messages(msg_type: str, format_defs: dict, unpacked: tuple) -> dict:

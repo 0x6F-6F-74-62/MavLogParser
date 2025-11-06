@@ -56,7 +56,7 @@ pip install pymavlink
 ### Quick Example - Parser
 
 ```python
-from business_logic.parser import Parser
+from src.business_logic import Parser
 
 # Read all messages from file
 with Parser("flight_log.BIN") as parser:
@@ -73,7 +73,7 @@ with Parser("flight_log.BIN") as parser:
 ### Quick Example - ParallelParser
 
 ```python
-from business_logic.parallel import ParallelParser
+from src.business_logic import ParallelParser
 
 # Read all messages from file
 parser = ParallelParser("large_flight_log.BIN", executor_type="process")
@@ -89,7 +89,7 @@ print(f"Parsed {len(messages)} IMU messages")
 ### Quick Example - PymavlinkParser
 
 ```python
-from business_logic.mavlink import Mavlink
+from src.business_logic import Mavlink
 
 with Mavlink("flight_log.BIN") as parser:
     # Using generator (memory efficient)

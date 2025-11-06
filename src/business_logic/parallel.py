@@ -1,15 +1,14 @@
 """Parallel MAVLink Binary Log Parser."""
 
-import mmap
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 import os
 from struct import Struct
 from typing import Any, Dict, List, Optional, Tuple, Literal, Type
 
-from business_logic.parser import Parser
-from business_logic.utils.logger import setup_logger
-from business_logic.utils.constants import MSG_HEADER, FORMAT_MAPPING, FORMAT_MSG_TYPE
-
+from src.business_logic.parser import Parser
+from src.utils.logger import setup_logger
+from src.utils.constants import MSG_HEADER, FORMAT_MAPPING
+from src.utils.helpers import is_valid_message_header
 
 class ParallelParser:
     """
@@ -140,7 +139,7 @@ class ParallelParser:
                 pos = data.find(MSG_HEADER, pos)
                 if pos == -1:
                     raise RuntimeError("No valid message headers found in file.")
-                if ParallelParser._is_valid_message_header(data, pos, fmt_defs):
+                if is_valid_message_header(data, pos, fmt_defs):
                     break
                 pos += 1
 
@@ -149,7 +148,7 @@ class ParallelParser:
                 end = min(start + chunk_size, size)
 
                 next_pos = data.find(MSG_HEADER, end)
-                while next_pos != -1 and not ParallelParser._is_valid_message_header(data, next_pos, fmt_defs):
+                while next_pos != -1 and not is_valid_message_header(data, next_pos, fmt_defs):
                     next_pos = data.find(MSG_HEADER, next_pos + 1)
 
                 pos = next_pos if next_pos != -1 else size
@@ -158,17 +157,4 @@ class ParallelParser:
             return chunks
         except Exception as e:
             raise RuntimeError(f"Error splitting to chunks: {e}") from e
-
-    @staticmethod
-    def _is_valid_message_header(data: bytes | mmap.mmap, pos: int, fmt_defs: Dict[int, Dict[str, Any]]) -> bool:
-        """Check if MSG_HEADER at pos marks a valid message start."""
-        if pos + 2 >= len(data) or data[pos : pos + 2] != MSG_HEADER:
-            return False
-
-        msg_id = data[pos + 2]
-        if msg_id == FORMAT_MSG_TYPE:
-            return True
-
-        fmt = fmt_defs.get(msg_id)
-        return bool(fmt and pos + fmt["Length"] <= len(data))
 
