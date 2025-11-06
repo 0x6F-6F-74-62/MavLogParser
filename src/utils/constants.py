@@ -1,6 +1,5 @@
 import json
 
-
 with open("../config.json", "r", encoding="utf-8") as f:
     config_data = json.load(f)
 
@@ -13,4 +12,3 @@ SCALE_FACTOR_FIELDS = set(config_data.get("SCALE_FACTOR_FIELDS"))
 LATITUDE_LONGITUDE_FORMAT = config_data.get("LATITUDE_LONGITUDE_FORMAT")
 BYTES_FIELDS = set(config_data.get("BYTES_FIELDS"))
 FMT_STRUCT = config_data.get("FMT_STRUCT")
-

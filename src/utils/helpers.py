@@ -1,8 +1,7 @@
-from typing import Dict, Any
 import mmap
+from typing import Any, Dict
 
-from src.utils.constants import MSG_HEADER, FORMAT_MSG_TYPE
-
+from src.utils.constants import FORMAT_MSG_TYPE, MSG_HEADER
 
 
 def is_valid_message_header(data: bytes | mmap.mmap, pos: int, fmt_defs: Dict[int, Dict[str, Any]]) -> bool:
@@ -17,8 +16,8 @@ def is_valid_message_header(data: bytes | mmap.mmap, pos: int, fmt_defs: Dict[in
     fmt = fmt_defs.get(msg_id)
     return bool(fmt and pos + fmt["Length"] <= len(data))
 
+
 def bytes_to_ascii(bytes_data: bytes) -> str:
     """Convert null-terminated bytes to ASCII string."""
     null = bytes_data.find(0)
     return bytes_data[: null if null != -1 else None].decode("ascii", "ignore").strip()
-

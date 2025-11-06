@@ -1,6 +1,7 @@
-from pymavlink import mavutil
 import os
-from typing import Any, Dict, Iterator, Optional, Type, List
+from typing import Any, Dict, Iterator, List, Optional, Type
+
+from pymavlink import mavutil
 
 
 class Mavlink:
@@ -45,5 +46,3 @@ class Mavlink:
     def get_all_messages(self, message_type: Optional[str] = None) -> List[Dict[str, Any]]:
         """Return all messages as a list (uses the generator internally)."""
         return [msg for msg in self.messages(message_type)]
-
-
