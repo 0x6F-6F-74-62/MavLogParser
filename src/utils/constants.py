@@ -1,6 +1,9 @@
 import json
+from pathlib import Path
 
-with open("../config.json", "r", encoding="utf-8") as f:
+config_path = Path(__file__).resolve().parent.parent.parent / "config.json"
+
+with open(config_path, "r", encoding="utf-8") as f:
     config_data = json.load(f)
 
 
