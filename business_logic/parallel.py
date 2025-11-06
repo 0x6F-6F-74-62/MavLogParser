@@ -122,39 +122,42 @@ class ParallelParser:
     @staticmethod
     def _split_to_chunks(parser: Parser, max_workers: int) -> List[Tuple[int, int]]:
         """Split the file into valid message-aligned chunks."""
-        if not parser.data:
-            raise RuntimeError("File must be opened before splitting.")
+        try:
+            if parser.data is None:
+                raise RuntimeError("File must be opened before splitting.")
 
-        data = parser.data
-        fmt_defs = parser.format_defs
-        size = len(data)
+            data = parser.data
+            fmt_defs = parser.format_defs
+            size = len(data)
 
-        if size == 0:
-            raise RuntimeError("Log file is empty.")
+            if size == 0:
+                raise RuntimeError("Log file is empty.")
 
-        chunk_size = max(size // max_workers, 10 * 1024 * 1024)
-        chunks, pos = [], 0
+            chunk_size = max(size // max_workers, 10 * 1024 * 1024)
+            chunks, pos = [], 0
 
-        while True:
-            pos = data.find(MSG_HEADER, pos)
-            if pos == -1:
-                raise RuntimeError("No valid message headers found in file.")
-            if ParallelParser._is_valid_message_header(data, pos, fmt_defs):
-                break
-            pos += 1
+            while True:
+                pos = data.find(MSG_HEADER, pos)
+                if pos == -1:
+                    raise RuntimeError("No valid message headers found in file.")
+                if ParallelParser._is_valid_message_header(data, pos, fmt_defs):
+                    break
+                pos += 1
 
-        while pos < size:
-            start = pos
-            end = min(start + chunk_size, size)
+            while pos < size:
+                start = pos
+                end = min(start + chunk_size, size)
 
-            next_pos = data.find(MSG_HEADER, end)
-            while next_pos != -1 and not ParallelParser._is_valid_message_header(data, next_pos, fmt_defs):
-                next_pos = data.find(MSG_HEADER, next_pos + 1)
+                next_pos = data.find(MSG_HEADER, end)
+                while next_pos != -1 and not ParallelParser._is_valid_message_header(data, next_pos, fmt_defs):
+                    next_pos = data.find(MSG_HEADER, next_pos + 1)
 
-            pos = next_pos if next_pos != -1 else size
-            chunks.append((start, pos))
+                pos = next_pos if next_pos != -1 else size
+                chunks.append((start, pos))
 
-        return chunks
+            return chunks
+        except Exception as e:
+            raise RuntimeError(f"Error splitting to chunks: {e}") from e
 
     @staticmethod
     def _is_valid_message_header(data: bytes | mmap.mmap, pos: int, fmt_defs: Dict[int, Dict[str, Any]]) -> bool:
@@ -168,3 +171,4 @@ class ParallelParser:
 
         fmt = fmt_defs.get(msg_id)
         return bool(fmt and pos + fmt["Length"] <= len(data))
+
