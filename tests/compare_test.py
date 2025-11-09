@@ -12,10 +12,10 @@ def test_parser_matches_pymavlink(log_file_path, reference_messages):
 
 
 def test_process_parser_matches_pymavlink(log_file_path, reference_messages):
-    parser = ParallelParser(log_file_path, executor_type="process")
-    compare_parser_outputs(reference_messages, parser.process_all(), "Pymavlink", "ProcessParser")
+    parser = ParallelParser(log_file_path)
+    compare_parser_outputs(reference_messages, parser.process_all(executor_type="process"), "Pymavlink", "ProcessParser")
 
 
 def test_thread_parser_matches_pymavlink(log_file_path, reference_messages):
-    parser = ParallelParser(log_file_path, executor_type="thread")
-    compare_parser_outputs(reference_messages, parser.process_all(), "Pymavlink", "ThreadParser")
+    parser = ParallelParser(log_file_path)
+    compare_parser_outputs(reference_messages, parser.process_all(executor_type="thread"), "Pymavlink", "ThreadParser")

@@ -115,13 +115,13 @@ with Parser("flight_log.BIN") as parser:
 from src.business_logic import ParallelParser
 
 # Read all messages from file
-parser = ParallelParser("large_flight_log.BIN", executor_type="process")
-messages = parser.process_all()
+parser = ParallelParser("large_flight_log.BIN")
+messages = parser.process_all(executor_type="process")
 print(f"Parsed {len(messages)} messages")
 
 # Filter by message type
-parser = ParallelParser("large_flight_log.BIN", executor_type="process")
-messages = parser.process_all(message_type="IMU")
+parser = ParallelParser("large_flight_log.BIN")
+messages = parser.process_all(message_type="IMU", executor_type="process")
 print(f"Parsed {len(messages)} IMU messages")
 ```
 
@@ -226,14 +226,14 @@ class ParallelParser:
     def __init__(
         self,
         filename: str,
-        executor_type: Literal["process", "thread"] = "process",
         max_workers: Optional[int] = None
     )
     
     # Process entire file in parallel
     def process_all(
         self, 
-        message_type: Optional[str] = None
+        message_type: Optional[str] = None,
+        executor_type: Literal["process", "thread"] = "process",
     ) -> List[Dict[str, Any]]
 ```
 
@@ -265,8 +265,8 @@ messages = parser.process_all()
 **3. Choose executor type**
 ```python
 # Threading instead of multiprocessing
-parser = ParallelParser("log.BIN", executor_type="thread", max_workers=16)
-messages = parser.process_all(message_type="GPS")
+parser = ParallelParser("log.BIN", max_workers=16)
+messages = parser.process_all(message_type="GPS", executor_type="thread")
 ```
 
 **4. Custom processing**
@@ -274,10 +274,9 @@ messages = parser.process_all(message_type="GPS")
 # For huge files (>2GB)
 parser = ParallelParser(
     "huge_log.BIN",
-    executor_type="process",
     max_workers=16  # Aggressive CPU usage
 )
-imu_data = parser.process_all(message_type="IMU")
+imu_data = parser.process_all(message_type="IMU", executor_type="process")
 ```
 
 #### How It Works
