@@ -63,8 +63,8 @@ class CLIMenu:
         try:
             if self.file_path is None:
                 raise RuntimeError("Error: File path cannot be empty.")
-            parser = ParallelParser(self.file_path, executor_type=executor_type)
-            messages = parser.process_all(message_type)
+            parser = ParallelParser(self.file_path)
+            messages = parser.process_all(message_type, executor_type=executor_type)
             self.logger.info(f"Parsed {len(messages):,} messages using {executor_type} pool")
             return messages
         except Exception as e:
