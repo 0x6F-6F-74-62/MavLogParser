@@ -1,14 +1,16 @@
 import struct
+import pytest
 from src.business_logic.parser import Parser
 from src.business_logic.parallel import ParallelParser
-
+from src.utils.helpers import bytes_to_ascii
 
 
 def test_parse_empty_file(empty_log_file):
     """Test parsing an empty file."""
-    with Parser(empty_log_file) as parser:
-        messages = list(parser.messages())
-        assert len(messages) == 0
+    with pytest.raises(RuntimeError, match="Empty MAVLink log file"):
+        with Parser(empty_log_file) as parser:
+            messages = list(parser.messages())
+            assert len(messages) == 0
 
 def test_parse_corrupted_file(corrupted_log_file):
     """Test parsing a file with no valid headers."""
@@ -39,13 +41,13 @@ def test_parse_specific_message_type(valid_log_file):
 
 def test_bytes_to_ascii():
     """Test _bytes_to_ascii static method."""
-    result = Parser._bytes_to_ascii(b"TEST\x00\x00")
+    result = bytes_to_ascii(b"TEST\x00\x00")
     assert result == "TEST"
 
-    result = Parser._bytes_to_ascii(b"TEST")
+    result = bytes_to_ascii(b"TEST")
     assert result == "TEST"
 
-    result = Parser._bytes_to_ascii(b"\x00")
+    result = bytes_to_ascii(b"\x00")
     assert result == ""
 
 def test_decode_messages_with_bytes_field():

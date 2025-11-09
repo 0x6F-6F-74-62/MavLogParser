@@ -1,21 +1,11 @@
 import pytest
 import struct
+
 from src.business_logic.parser import Parser
 from src.business_logic.parallel import ParallelParser
+from src.utils.helpers import is_valid_message_header
 
 
-
-def test_initialization_process_executor():
-    """Test initialization with process executor."""
-    parser = ParallelParser("test.bin", executor_type="process")
-    assert parser.executor_type == "process"
-    assert parser.max_workers > 0
-
-def test_initialization_thread_executor():
-    """Test initialization with thread executor."""
-    parser = ParallelParser("test.bin", executor_type="thread")
-    assert parser.executor_type == "thread"
-    assert parser.max_workers == 16
 
 def test_initialization_custom_workers():
     """Test initialization with custom worker count."""
@@ -48,8 +38,8 @@ def test_process_all_empty_file(empty_log_file):
 
 def test_process_all_thread_executor(valid_log_file):
     """Test process_all with thread executor."""
-    parser = ParallelParser(valid_log_file, executor_type="thread", max_workers=4)
-    results = parser.process_all()
+    parser = ParallelParser(valid_log_file, max_workers=4)
+    results = parser.process_all(executor_type="thread")
 
     assert isinstance(results, list)
     assert len(results) >= 1
@@ -86,8 +76,8 @@ def test_split_to_chunks_many_workers(valid_log_file):
 
 def test_split_to_chunks_empty_file(empty_log_file):
     """Test splitting empty file raises error."""
-    with Parser(empty_log_file) as parser:
-        with pytest.raises(RuntimeError, match="Log file is empty"):
+    with pytest.raises(RuntimeError, match="Empty MAVLink log file"):
+        with Parser(empty_log_file) as parser:
             ParallelParser._split_to_chunks(parser, max_workers=2)
 
 def test_split_to_chunks_no_headers(corrupted_log_file):
@@ -104,26 +94,26 @@ def test_is_valid_message_header():
         1: {"Length": 10}
     }
 
-    assert ParallelParser._is_valid_message_header(data, 0, format_defs)
+    assert is_valid_message_header(data, 0, format_defs)
 
-    assert not ParallelParser._is_valid_message_header(data, 99, format_defs)
+    assert not is_valid_message_header(data, 99, format_defs)
 
     bad_data = b"\x00\x00\x01" + b"\x00" * 100
-    assert not ParallelParser._is_valid_message_header(bad_data, 0, format_defs)
+    assert not is_valid_message_header(bad_data, 0, format_defs)
 
 def test_is_valid_message_header_fmt():
     """Test validating FMT message headers."""
     data = b"\xa3\x95\x80" + b"\x00" * 100  # 128 = FORMAT_MSG_TYPE
     format_defs = {}
 
-    assert ParallelParser._is_valid_message_header(data, 0, format_defs)
+    assert is_valid_message_header(data, 0, format_defs)
 
 def test_is_valid_message_header_unknown_type():
     """Test validating headers with unknown message type."""
     data = b"\xa3\x95\xFF" + b"\x00" * 100
     format_defs = {}
 
-    assert not ParallelParser._is_valid_message_header(data, 0, format_defs)
+    assert not is_valid_message_header(data, 0, format_defs)
 
 def test_process_chunk_basic(valid_log_file):
     """Test processing a single chunk."""

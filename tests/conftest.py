@@ -1,6 +1,7 @@
 import struct
 import pytest
 import json
+
 from src.utils.constants import (
     MSG_HEADER, FORMAT_MSG_TYPE, FORMAT_MSG_LENGTH, FORMAT_MAPPING,
     SCALE_FACTOR_FIELDS, LATITUDE_LONGITUDE_FORMAT, BYTES_FIELDS, FMT_STRUCT
