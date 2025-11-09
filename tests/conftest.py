@@ -6,7 +6,7 @@ from src.utils.constants import (
     SCALE_FACTOR_FIELDS, LATITUDE_LONGITUDE_FORMAT, BYTES_FIELDS, FMT_STRUCT
 )
 
-from src.business_logic import Mavlink
+from src.business_logic.mavlink import Mavlink
 
 
 @pytest.fixture()

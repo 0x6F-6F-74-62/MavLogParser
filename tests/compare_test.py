@@ -1,5 +1,5 @@
-from src.business_logic import Parser
-from src.business_logic import ParallelParser
+from src.business_logic.parser import Parser
+from src.business_logic.parallel import ParallelParser
 from tests.test_utils import compare_parser_outputs
 
 
