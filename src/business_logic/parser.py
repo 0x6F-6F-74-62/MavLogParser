@@ -137,7 +137,7 @@ class Parser:
                 "Length": length,
                 "Format": format_def,
                 "Columns": cols,
-                "Struct": struct.Struct("<" + "".join(FORMAT_MAPPING[c] for c in format_def)),
+                "Struct": struct.Struct("<" + "".join(map(FORMAT_MAPPING.__getitem__, format_def)))
             }
 
             self.format_defs[msg_type] = format_defs

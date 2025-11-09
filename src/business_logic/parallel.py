@@ -4,6 +4,8 @@ import os
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from struct import Struct
 from typing import Any, Dict, List, Literal, Optional, Tuple, Type
+from itertools import repeat
+from itertools import chain
 
 from src.business_logic.parser import Parser
 from src.utils.constants import FORMAT_MAPPING, MSG_HEADER
@@ -22,30 +24,26 @@ class ParallelParser:
     ):
         """Initialize the ParallelParser."""
         self.filename: str = filename
-        self.max_workers: int = 0
-        self.max_workers = max_workers if max_workers else os.cpu_count() or 1
+        self.max_workers: int = max_workers or os.cpu_count() or 1
         self.logger = setup_logger(os.path.basename(__file__))
 
     def process_all(self, message_type: Optional[str] = None, executor_type: Literal["process", "thread"] = "process") -> List[Dict[str, Any]]:
         """Process the entire log file in parallel and return sorted messages."""
         try:
             with Parser(self.filename) as parser:
-                list(parser.messages("FMT"))
+                for _ in parser.messages("FMT"): pass
                 chunks = ParallelParser._split_to_chunks(parser, self.max_workers)
 
-                fmt_def = (
-                    {
-                        msg_id: {
-                            "Name": fmt["Name"],
-                            "Length": fmt["Length"],
-                            "Format": fmt["Format"],
-                            "Columns": fmt["Columns"],
-                        }
-                        for msg_id, fmt in parser.format_defs.items()
+                fmt_def = {
+                    msg_id: {
+                        "Name": fmt["Name"],
+                        "Length": fmt["Length"],
+                        "Format": fmt["Format"],
+                        "Columns": fmt["Columns"],
+                        "StructStr": "<" + "".join(FORMAT_MAPPING[c] for c in fmt["Format"])
                     }
-                    if executor_type == "process"
-                    else parser.format_defs
-                )
+                    for msg_id, fmt in parser.format_defs.items()
+                } if executor_type == "process" else parser.format_defs
 
                 need_struct_rebuild = executor_type == "process"
 
@@ -81,14 +79,14 @@ class ParallelParser:
         with executor_class(max_workers=self.max_workers) as executor:
             chunk_results = executor.map(
                 ParallelParser._process_chunk,
-                [self.filename] * chunks_count,
+                repeat(self.filename, chunks_count),
                 chunks,
-                [fmt_def] * chunks_count,
-                [message_type] * chunks_count,
-                [need_struct_rebuild] * chunks_count,
+                repeat(fmt_def, chunks_count),
+                repeat(message_type, chunks_count),
+                repeat(need_struct_rebuild, chunks_count),
             )
 
-        results = [msg for chunk in chunk_results for msg in chunk]
+        results = list(chain.from_iterable(chunk_results))
 
         return results
 
@@ -104,8 +102,7 @@ class ParallelParser:
         try:
             if need_struct_rebuild:
                 for fmt in format_defs.values():
-                    fmt["Struct"] = Struct("<" + "".join(FORMAT_MAPPING[char] for char in fmt["Format"]))
-
+                    fmt["Struct"] = Struct(fmt["StructStr"])
             with Parser(filename) as parser:
                 parser.format_defs = format_defs
                 parser.offset = chunk_range[0]
@@ -131,14 +128,14 @@ class ParallelParser:
 
             chunk_size = max(size // max_workers, 10 * 1024 * 1024)
             chunks, pos = [], 0
-
+            header_len = len(MSG_HEADER)
             while True:
                 pos = data.find(MSG_HEADER, pos)
                 if pos == -1:
                     raise RuntimeError("No valid message headers found in file.")
                 if is_valid_message_header(data, pos, fmt_defs):
                     break
-                pos += 1
+                pos += header_len
 
             while pos < size:
                 start = pos
@@ -146,7 +143,7 @@ class ParallelParser:
 
                 next_pos = data.find(MSG_HEADER, end)
                 while next_pos != -1 and not is_valid_message_header(data, next_pos, fmt_defs):
-                    next_pos = data.find(MSG_HEADER, next_pos + 1)
+                    next_pos = data.find(MSG_HEADER, next_pos + header_len)
 
                 pos = next_pos if next_pos != -1 else size
                 chunks.append((start, pos))

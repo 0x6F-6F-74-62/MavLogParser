@@ -4,7 +4,7 @@ import struct
 from src.business_logic.parser import Parser
 from src.business_logic.parallel import ParallelParser
 from src.utils.helpers import is_valid_message_header
-
+from src.utils.constants import FORMAT_MAPPING
 
 
 def test_initialization_custom_workers():
@@ -129,6 +129,7 @@ def test_process_chunk_basic(valid_log_file):
             "Length": fmt["Length"],
             "Format": fmt["Format"],
             "Columns": fmt["Columns"],
+            "StructStr": "<" + "".join(FORMAT_MAPPING[c] for c in fmt["Format"])
         }
 
     messages = ParallelParser._process_chunk(
@@ -156,6 +157,7 @@ def test_process_chunk_with_filter(valid_log_file):
             "Length": fmt["Length"],
             "Format": fmt["Format"],
             "Columns": fmt["Columns"],
+            "StructStr": "<" + "".join(FORMAT_MAPPING[c] for c in fmt["Format"])
         }
 
     messages = ParallelParser._process_chunk(
@@ -193,6 +195,7 @@ def test_struct_rebuild(valid_log_file):
                 "Length": fmt["Length"],
                 "Format": fmt["Format"],
                 "Columns": fmt["Columns"],
+                "StructStr": "<" + "".join(FORMAT_MAPPING[c] for c in fmt["Format"])
             }
 
         messages = ParallelParser._process_chunk(
