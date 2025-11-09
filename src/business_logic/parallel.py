@@ -18,19 +18,15 @@ class ParallelParser:
     """
 
     def __init__(
-        self, filename: str, executor_type: Literal["process", "thread"] = "process", max_workers: Optional[int] = None
+        self, filename: str, max_workers: Optional[int] = None
     ):
         """Initialize the ParallelParser."""
         self.filename: str = filename
-        self.executor_type: Literal["process", "thread"] = executor_type
         self.max_workers: int = 0
-        if executor_type == "process":
-            self.max_workers = max_workers if max_workers else os.cpu_count() or 4
-        else:
-            self.max_workers = max_workers if max_workers else 16
+        self.max_workers = max_workers if max_workers else os.cpu_count() or 1
         self.logger = setup_logger(os.path.basename(__file__))
 
-    def process_all(self, message_type: Optional[str] = None) -> List[Dict[str, Any]]:
+    def process_all(self, message_type: Optional[str] = None, executor_type: Literal["process", "thread"] = "process") -> List[Dict[str, Any]]:
         """Process the entire log file in parallel and return sorted messages."""
         try:
             with Parser(self.filename) as parser:
@@ -47,11 +43,11 @@ class ParallelParser:
                         }
                         for msg_id, fmt in parser.format_defs.items()
                     }
-                    if self.executor_type == "process"
+                    if executor_type == "process"
                     else parser.format_defs
                 )
 
-                need_struct_rebuild = self.executor_type == "process"
+                need_struct_rebuild = executor_type == "process"
 
             if not chunks:
                 raise RuntimeError("No chunks to process.")
@@ -59,7 +55,7 @@ class ParallelParser:
             chunks_count = len(chunks)
             self.logger.info(f"Processing {chunks_count} chunks with {self.max_workers} workers...")
 
-            executor_class = ProcessPoolExecutor if self.executor_type == "process" else ThreadPoolExecutor
+            executor_class = ProcessPoolExecutor if executor_type == "process" else ThreadPoolExecutor
 
             results = self._run_executor(
                 executor_class, chunks_count, chunks, fmt_def, message_type, need_struct_rebuild
