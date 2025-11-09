@@ -119,7 +119,7 @@ def test_process_chunk_basic(valid_log_file):
     """Test processing a single chunk."""
     with Parser(valid_log_file) as parser:
         list(parser.messages("FMT"))
-        format_defs = parser.format_defs
+        format_defs = parser.format_definitions
         file_size = len(parser.data)
 
     serializable_defs = {}
@@ -147,7 +147,7 @@ def test_process_chunk_with_filter(valid_log_file):
     """Test processing chunk with message type filter."""
     with Parser(valid_log_file) as parser:
         list(parser.messages("FMT"))
-        format_defs = parser.format_defs
+        format_defs = parser.format_definitions
         file_size = len(parser.data)
 
     serializable_defs = {}
@@ -189,7 +189,7 @@ def test_struct_rebuild(valid_log_file):
         list(parser.messages("FMT"))
 
         format_defs = {}
-        for msg_id, fmt in parser.format_defs.items():
+        for msg_id, fmt in parser.format_definitions.items():
             format_defs[msg_id] = {
                 "Name": fmt["Name"],
                 "Length": fmt["Length"],

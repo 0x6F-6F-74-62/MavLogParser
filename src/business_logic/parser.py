@@ -22,16 +22,16 @@ from src.utils.logger import setup_logger
 class Parser:
     """
     MAVLink Binary Log Parser (.BIN)
-    Parses ArduPilot-style MAVLink binary log files using mmap for memory efficiency.
+    Parses ArduPilot-style MAVLink binary log files.
     """
 
-    def __init__(self, filename: str):
-        self.filename: str = filename
+    def __init__(self, file_path: str):
+        self.filename: str = file_path
         self.logger = setup_logger(os.path.basename(__file__))
         self._file: Optional[Any] = None
         self.data: Optional[mmap.mmap] = None
         self.offset: int = 0
-        self.format_defs: Dict[int, Dict[str, Any]] = {}
+        self.format_definitions: Dict[int, Dict[str, Any]] = {}
 
     def __enter__(self) -> "Parser":
         """Open and memory-map the MAVLink log file."""
@@ -42,7 +42,7 @@ class Parser:
                 raise RuntimeError("Empty MAVLink log file")
             else:
                 self.data = mmap.mmap(self._file.fileno(), 0, access=mmap.ACCESS_READ)
-            self.logger.info(f"Opened file: {self.filename}")
+            self.logger.debug(f"Opened file: {self.filename}")
             return self
         except Exception as e:
             self.logger.error(f"Failed to open file '{self.filename}': {e}")
@@ -59,7 +59,7 @@ class Parser:
                 self.data.close()
             if self._file:
                 self._file.close()
-            self.logger.info(f"Closed file: {self.filename}")
+            self.logger.debug(f"Closed file: {self.filename}")
         except Exception as e:
             self.logger.error(f"Failed to close resource: {e}")
         self.data = self._file = None
@@ -80,13 +80,13 @@ class Parser:
             try:
                 message_id: int = self.data[position + 2]
                 if message_id == FORMAT_MSG_TYPE:
-                    format_defs: Optional[Dict[str, Any]] = self._extract_format_def(position)
-                    self.offset = position + (FORMAT_MSG_LENGTH if format_defs else 1)
-                    if format_defs and (message_type in (None, "FMT")):
-                        yield format_defs
+                    format_definitions: Optional[Dict[str, Any]] = self._extract_format_def(position)
+                    self.offset = position + (FORMAT_MSG_LENGTH if format_definitions else 1)
+                    if format_definitions and (message_type in (None, "FMT")):
+                        yield format_definitions
                     continue
 
-                msg_format: Optional[Dict[str, Any]] = self.format_defs.get(message_id)
+                msg_format: Optional[Dict[str, Any]] = self.format_definitions.get(message_id)
                 if not msg_format:
                     self.offset = position + 1
                     continue
@@ -133,6 +133,8 @@ class Parser:
                 return None
 
             format_defs = {
+                "mavpackettype": "FMT",
+                "Type": msg_type,
                 "Name": name,
                 "Length": length,
                 "Format": format_def,
@@ -140,16 +142,12 @@ class Parser:
                 "Struct": struct.Struct("<" + "".join(map(FORMAT_MAPPING.__getitem__, format_def)))
             }
 
-            self.format_defs[msg_type] = format_defs
+            self.format_definitions[msg_type] = format_defs
 
-            return {
-                "mavpackettype": "FMT",
-                "Type": msg_type,
-                "Name": name,
-                "Length": length,
-                "Format": format_def,
-                "Columns": ",".join(cols),
-            }
+            result = format_defs.copy()
+            result.pop("Struct", None)
+            result["Columns"] = ",".join(result["Columns"])
+            return result
 
         except Exception as e:
             self.logger.error(f"Error parsing FMT at offset {position}: {e}")

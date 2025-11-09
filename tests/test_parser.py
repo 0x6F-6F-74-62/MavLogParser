@@ -111,12 +111,12 @@ def test_format_defs_persistence(valid_log_file):
     with Parser(valid_log_file) as parser:
         list(parser.messages("FMT"))
 
-        assert len(parser.format_defs) > 0
+        assert len(parser.format_definitions) > 0
 
         parser.offset = 0
         messages = list(parser.messages())
 
-        assert len(parser.format_defs) > 0
+        assert len(parser.format_definitions) > 0
 
 def test_malformed_fmt_message(tmp_path):
     """Test handling of malformed FMT messages."""
